@@ -17,6 +17,7 @@ const SETTINGS = {
   maxHistoryLength: 20, // Number of messages to keep in history
   inactivityThreshold: 10 * 60 * 1000, // 10 minutes in milliseconds (time before sending an auto-message)
   fallbackMessage: 'I’m thinking about juggling!', // If the response ends up empty, reply with this instead.
+  enableAutoMessages: true, // Set to false to disable auto-messages
 };
 
 // === SYSTEM PROMPT === //
@@ -96,8 +97,8 @@ async function getOllamaResponse(userMessage, context) {
 
 // Function to send a message based on the message history
 async function sendAutoMessage(channel) {
-  if (messageHistory.length === 0) {
-    return; // Do nothing if there’s no message history
+  if (messageHistory.length === 0 || !SETTINGS.enableAutoMessages) {
+    return; // Do nothing if there’s no message history or auto-messages are disabled
   }
 
   // Get the recent conversation context
@@ -151,7 +152,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
     // If the response is empty after removing <think> tags, send a default message
     if (!response) {
-      response = 'I’m thinking about juggling!';
+      response = SETTINGS.fallbackMessage;
     }
 
     // Send the cleaned response back to the chat
@@ -162,8 +163,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 // Timer to check for inactivity
 setInterval(() => {
   const now = Date.now();
-  if (now - lastBotMentionTime >= SETTINGS.inactivityThreshold) {
-    // Send an auto-message if the bot has been inactive for the specified time
+  if (now - lastBotMentionTime >= SETTINGS.inactivityThreshold && SETTINGS.enableAutoMessages) {
+    // Send an auto-message if the bot has been inactive for the specified time and auto-messages are enabled
     sendAutoMessage(SETTINGS.channel);
     lastBotMentionTime = now; // Reset the timer
   }
