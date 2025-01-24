@@ -3,7 +3,7 @@ Twitch chatbot using chat history as context for Ollama LLMs
 
 ## Features
 * Responds to mentions
-* Adjustable timer where the bot automatically engages with chat when it's not been mentioned for a set amount of time.
+* Optional adjustable timer where the bot automatically engages with chat when it's not been mentioned for a set amount of time.
 * Adjustable context length (how many messages back it has knowledge about)
 * Support for reasoning models (hides <think> tags and its content from chat output)
 
