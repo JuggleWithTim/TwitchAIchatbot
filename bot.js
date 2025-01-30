@@ -103,7 +103,6 @@ async function sendAutoMessage(channel) {
 
   // Check if the most recent message was sent by the bot
   const mostRecentMessage = messageHistory[messageHistory.length - 1];
-  console.log('Most Recent Message:', mostRecentMessage);
   if (mostRecentMessage && mostRecentMessage.startsWith(`${SETTINGS.username}:`)) {
     console.log('Most recent message was sent by the bot. Skipping auto-message.');
     lastBotMentionTime = Date.now(); // Reset the timer
