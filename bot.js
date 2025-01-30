@@ -101,6 +101,15 @@ async function sendAutoMessage(channel) {
     return; // Do nothing if there’s no message history or auto-messages are disabled
   }
 
+  // Check if the most recent message was sent by the bot
+  const mostRecentMessage = messageHistory[messageHistory.length - 1];
+  console.log('Most Recent Message:', mostRecentMessage);
+  if (mostRecentMessage && mostRecentMessage.startsWith(`${SETTINGS.username}:`)) {
+    console.log('Most recent message was sent by the bot. Skipping auto-message.');
+    lastBotMentionTime = Date.now(); // Reset the timer
+    return;
+  }
+
   // Get the recent conversation context
   const context = messageHistory.join('\n');
 
@@ -121,8 +130,6 @@ async function sendAutoMessage(channel) {
 
 // Event listener for Twitch chat messages
 twitchClient.on('message', async (channel, tags, message, self) => {
-  // Ignore messages from the bot itself
-  if (self) return;
 
   // Add the message to the history
   messageHistory.push(`${tags.username}: ${message}`);
@@ -131,6 +138,9 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   if (messageHistory.length > SETTINGS.maxHistoryLength) {
     messageHistory.shift(); // Remove the oldest message
   }
+
+  // Ignore further processing for bot's own messages
+  if (self) return;
 
   // Check if the bot is mentioned in the message
   const botUsername = twitchClient.getUsername().toLowerCase();
