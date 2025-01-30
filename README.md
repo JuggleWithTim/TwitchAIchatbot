@@ -1,5 +1,5 @@
 # TwitchOllama
-Twitch chatbot using chat history as context for Ollama LLMs
+Twitch chatbot using chat history as context for Ollama or OpenAI LLMs
 
 ## Features
 * Responds to mentions
@@ -19,7 +19,7 @@ Twitch chatbot using chat history as context for Ollama LLMs
 ### 3. Install Dependencies
 * Open the command prompt and navigate to the folder containing bot.js
 `cd /path/to/TwitchOllama`
-* Install required npm packages with `npm install tmi.js axios`
+* Install required npm packages with `npm install tmi.js axios openai`
 * Make sure Ollama has the model you want to use installed. Run `ollama run llama3.2` in the command prompt to install the default model.
 
 ### 4. Configure the Bot
