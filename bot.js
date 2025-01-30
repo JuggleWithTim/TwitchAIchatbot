@@ -6,9 +6,9 @@ const { OpenAI } = require('openai'); // OpenAI Node.js module
 // === USER SETTINGS === //
 const SETTINGS = {
   // Twitch bot credentials
-  username: 'juggletimbot', // Replace with your bot's Twitch username
+  username: 'botusername', // Replace with your bot's Twitch username
   password: 'oauth:000000000000000000000000000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
-  channel: 'jugglewithtim', // Replace with the channel name where the bot will join
+  channel: 'channelname', // Replace with the channel name where the bot will join
 
   // API settings
   useOpenAI: false, // Set to true to use OpenAI, false to use Ollama
