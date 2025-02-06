@@ -7,68 +7,36 @@ const { OpenAI } = require('openai'); // OpenAI Node.js module
 const SETTINGS = {
   // Twitch bot credentials
   username: 'botusername', // Replace with your bot's Twitch username
-  password: 'oauth:000000000000000000000000000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
+  password: 'oauth:00000000000000000000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
   channel: 'channelname', // Replace with the channel name where the bot will join
 
   // API settings
   useOpenAI: false, // Set to true to use OpenAI, false to use Ollama
   ollamaApiUrl: 'http://localhost:11434/api/generate', // Ollama API endpoint
   ollamaModelName: 'llama3.2', // Ollama model to use
-  openaiApiKey: '000000000000000000000000000', // Replace with your OpenAI API key
-  openaiModelName: 'gpt-4o-mini', // OpenAI model to use (e.g., gpt-3.5-turbo, gpt-4o-mini, gpt-4o) 
+  openaiApiKey: '0000000000000000000000', // Replace with your OpenAI API key
+  openaiModelName: 'gpt-4o-mini', // OpenAI model to use (e.g., gpt-3.5-turbo, gpt-4o-mini, gpt-4o)
 
-  // Behavior settings
-  maxHistoryLength: 20, // Number of messages to keep in history
+  // Default behavior settings (can be changed during runtime using commands)
+  maxHistoryLength: 15, // Number of messages to keep in history
   inactivityThreshold: 10 * 60 * 1000, // 10 minutes in milliseconds (time before sending an auto-message)
-  fallbackMessage: 'I’m thinking about juggling!', // If the response ends up empty, reply with this instead.
+  fallbackMessage: 'Ooooops, something went wrong', // If the response ends up empty, reply with this instead.
   enableAutoMessages: true, // Set to false to disable auto-messages
 };
 
 // === SYSTEM PROMPT === //
-const SYSTEM_PROMPT = `
-You are @BotUsername, a friendly and goofy Twitch chatbot.
+let SYSTEM_PROMPT = `
+You are @botusername, a friendly and goofy Twitch chatbot.
 Keep your responses concise and engaging.
 You can not send messages longer than 423 characters.
-You are here to provide entertainment and give your input on the conversations taking place.
-You have an interest in juggling and flow arts.
-
-In addition to standard emojis you have access to the following Twitch emotes:
-(emote = description)
-DinoDance = A dancing dinosaur
-CoolCat = A cool cat
-PopCorn = A bowl of popcorn
-LUL = A laughing emote
-Kappa = Indicates sarcasm
-NomNom = A cookie with the text "nom nom"
-SeemsGood = A thumbs up
-WutFace = A confused and shocked face
-BabyRage = A screaming angry baby
-MrDestructoid = A robot
-HSWP = A speech balloon with the text "Well played!"
-GoatEmotey = A goat
-PogChamp = Expresses excitement
-TwitchUnity = A heart formed by two hands
-SabaPing = A fish head
-TheIlluminati = An Illuminati triangle
-DoritosChip = A Doritos chip
-StinkyCheese = A cheese that looks stinky
-NotLikeThis = A reaction to something that did not go as expected
-BigSad = A crying face
-BOP = A hammer
-BopBop = A colorful bear dancing
-HeyGuys = A person waving their hand to say hello
-PizzaTime = A pizza with pineapple
-twitchRaid = An emote to use when a raid has happened
-
-Write emotes with double space before and after the emote. Example:  LUL  
-Separate emotes from other text and symbols with double whitespace.
+Your mission is to interact with the chat like you are a natural part of the conversation.
 `;
 
 // Initialize the OpenAI client
 const openai = new OpenAI({
   apiKey: SETTINGS.openaiApiKey,
 });
-  
+
 // Twitch bot configuration
 const twitchClient = new tmi.Client({
   options: { debug: true }, // Enable debugging
@@ -84,6 +52,9 @@ let messageHistory = [];
 
 // Timer to track inactivity
 let lastBotMentionTime = Date.now();
+
+// Flag to track if the bot is paused
+let botPaused = false;
 
 // Function to call Ollama or OpenAI API
 async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
@@ -122,15 +93,18 @@ async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
 
 // Function to send a message based on the message history
 async function sendAutoMessage(channel) {
-  if (messageHistory.length === 0 || !SETTINGS.enableAutoMessages) {
-    return; // Do nothing if there’s no message history or auto-messages are disabled
-  }
+  // Get the most recent message from the history
+  const mostRecentMessage = messageHistory[messageHistory.length - 1];
 
   // Check if the most recent message was sent by the bot
-  const mostRecentMessage = messageHistory[messageHistory.length - 1];
-  if (mostRecentMessage && mostRecentMessage.startsWith(`${SETTINGS.username}:`)) {
+  const botUsername = twitchClient.getUsername().toLowerCase();
+  if (mostRecentMessage && mostRecentMessage.toLowerCase().startsWith(`${botUsername}:`)) {
     console.log('Most recent message was sent by the bot. Skipping auto-message.');
-    lastBotMentionTime = Date.now(); // Reset the timer
+    return;
+  }
+
+  // Don't send auto-messages if the bot is paused, auto-messages are disabled, or there’s no message history
+  if (botPaused || messageHistory.length === 0 || !SETTINGS.enableAutoMessages) {
     return;
   }
 
@@ -150,10 +124,18 @@ async function sendAutoMessage(channel) {
 
   // Send the message to the chat
   twitchClient.say(channel, `${response}`);
+
+  // Add the bot's message to history
+  messageHistory.push(`${SETTINGS.username}: ${response}`);
+
+  // Update the last mention time
+  lastBotMentionTime = Date.now();
 }
 
 // Event listener for Twitch chat messages
 twitchClient.on('message', async (channel, tags, message, self) => {
+  // Ignore messages from the bot itself
+  if (self) return;
 
   // Add the message to the history
   messageHistory.push(`${tags.username}: ${message}`);
@@ -163,8 +145,104 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     messageHistory.shift(); // Remove the oldest message
   }
 
-  // Ignore further processing for bot's own messages
-  if (self) return;
+  // Check if the sender is a broadcaster, moderator, or JuggleWithTim
+  const isBroadcaster = tags.badges?.broadcaster === '1';
+  const isModerator = tags.badges?.moderator === '1';
+  const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
+
+  // === COMMAND HANDLING === //
+  // Command: !aiauto - Toggle auto-messages on or off
+  if (message.toLowerCase() === '!aiauto' && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    SETTINGS.enableAutoMessages = !SETTINGS.enableAutoMessages; // Toggle the state
+    const statusMessage = SETTINGS.enableAutoMessages ? 'Auto-messages are now enabled. 🟢' : 'Auto-messages are now disabled. 🔴';
+    twitchClient.say(channel, statusMessage);
+    messageHistory.push(`${SETTINGS.username}: ${statusMessage}`);
+    return;
+  }
+
+  // Command: !aitimer <minutes> - Set inactivity timer
+  if (message.toLowerCase().startsWith('!aitimer ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    const minutes = parseInt(message.split(' ')[1], 10); // Extract the number of minutes
+    if (isNaN(minutes) || minutes < 1) {
+      twitchClient.say(channel, 'Please provide a valid number of minutes (e.g., !aitimer 30). ❌');
+      messageHistory.push(`${SETTINGS.username}: Invalid input for !aitimer. ❌`);
+    } else {
+      SETTINGS.inactivityThreshold = minutes * 60 * 1000; // Convert minutes to milliseconds
+      twitchClient.say(channel, `Inactivity timer set to ${minutes} minutes. ⏲️`);
+      messageHistory.push(`${SETTINGS.username}: Inactivity timer set to ${minutes} minutes. ⏲️`);
+    }
+    return;
+  }
+
+  // Command: !aisysprompt <new system message> - Update the system prompt
+  if (message.toLowerCase().startsWith('!aisysprompt ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    const newSystemPrompt = message.slice('!aisysprompt '.length).trim();
+    if (newSystemPrompt) {
+      SYSTEM_PROMPT = newSystemPrompt;
+      twitchClient.say(channel, 'System prompt updated successfully! ✅');
+      messageHistory.push(`${SETTINGS.username}: System prompt updated successfully! ✅`);
+    } else {
+      twitchClient.say(channel, 'Please provide a valid system prompt. ❌');
+      messageHistory.push(`${SETTINGS.username}: Please provide a valid system prompt. ❌`);
+    }
+    return;
+  }
+
+  // Command: !aistop - Pause the bot
+  if (message.toLowerCase() === '!aistop' && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    botPaused = true;
+    twitchClient.say(channel, 'Bot is now paused. ⏸️');
+    messageHistory.push(`${SETTINGS.username}: Bot is now paused. ⏸️`);
+    return;
+  }
+
+  // Command: !aistart - Resume the bot
+  if (message.toLowerCase() === '!aistart' && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    botPaused = false;
+    twitchClient.say(channel, 'Bot is now resumed. ▶️');
+    messageHistory.push(`${SETTINGS.username}: Bot is now resumed. ▶️`);
+    return;
+  }
+  
+  // Command: !aicontext <number> - Change context history length
+  if (message.toLowerCase().startsWith('!aicontext ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    const newLength = parseInt(message.split(' ')[1], 10); // Extract the number
+    if (isNaN(newLength) || newLength < 1 || newLength > 50) {
+      twitchClient.say(channel, 'Please provide a number between 1-50 (e.g., !aicontext 20). ❌');
+      messageHistory.push(`${SETTINGS.username}: Invalid input for !aicontext. ❌`);
+    } else {
+      SETTINGS.maxHistoryLength = newLength;
+      // Trim message history if current length exceeds new limit
+      while (messageHistory.length > SETTINGS.maxHistoryLength) {
+        messageHistory.shift();
+      }
+      twitchClient.say(channel, `Context history length set to ${newLength} messages 📜`);
+      messageHistory.push(`${SETTINGS.username}: Context history length set to ${newLength} messages 📜`);
+    }
+    return;
+  }
+  
+  // Command: !aihelp - Display available commands
+  if (message.toLowerCase() === '!aihelp' && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    const helpMessage = `Available commands: 
+      !aiauto - Toggle auto-messages on/off | 
+      !aitimer <minutes> - Set auto-message timer | 
+      !aisysprompt <new prompt> - Update system prompt | 
+      !aicontext <number> - Set context history length (1-50) | 
+      !aistop - Pause the bot | 
+      !aistart - Resume the bot | 
+      !aihelp - Show this help message`;
+
+    
+    twitchClient.say(channel, helpMessage);
+    messageHistory.push(`${SETTINGS.username}: ${helpMessage}`);
+    return;
+  }
+
+
+  // === NORMAL MESSAGE HANDLING === //
+  // Check if the bot is paused
+  if (botPaused) return;
 
   // Check if the bot is mentioned in the message
   const botUsername = twitchClient.getUsername().toLowerCase();
@@ -182,26 +260,42 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     let response = await getChatResponse(userMessage, context);
 
     // Remove <think> tags (including content) from the response
-    response = response.replace(/<think[^>]*>([\sS]*?)<\/think>/gi, '').trim();
+    response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
 
-    // If the response is empty after removing <think> tags, send a default message
+    // If the response is empty, send a default message
     if (!response) {
       response = SETTINGS.fallbackMessage;
     }
 
     // Send the cleaned response back to the chat
     twitchClient.say(channel, `@${tags.username}, ${response}`);
+
+    // Add the bot's message to history
+    messageHistory.push(`${SETTINGS.username}: ${response}`);
   }
 });
 
 // Timer to check for inactivity
 setInterval(() => {
   const now = Date.now();
-  if (now - lastBotMentionTime >= SETTINGS.inactivityThreshold && SETTINGS.enableAutoMessages) {
-    // Send an auto-message if the bot has been inactive for the specified time and auto-messages are enabled
-    sendAutoMessage(SETTINGS.channel);
-    lastBotMentionTime = now; // Reset the timer
+
+  // Don't send auto-messages if:
+  // 1. The bot has been active recently (based on inactivityThreshold)
+  // 2. Auto-messages are disabled
+  // 3. The bot is paused
+  if (now - lastBotMentionTime < SETTINGS.inactivityThreshold || !SETTINGS.enableAutoMessages || botPaused) {
+    return;
   }
+
+  // Check if the most recent message was sent by the bot
+  const botUsername = twitchClient.getUsername().toLowerCase();
+  if (messageHistory.length > 0 && messageHistory[messageHistory.length - 1].toLowerCase().startsWith(`${botUsername}:`)) {
+    console.log('Most recent message was sent by the bot. Skipping auto-message.');
+    return;
+  }
+
+  // Send the auto-message
+  sendAutoMessage(SETTINGS.channel);
 }, 60000); // Check every minute
 
 // Connect to Twitch chat
