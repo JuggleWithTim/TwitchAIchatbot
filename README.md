@@ -10,9 +10,9 @@ Twitch chatbot using chat history as context for Ollama or OpenAI LLMs
 
 ## Chat commands
 * !aiauto - Toggle auto-messages on/off
-* !aitimer <minutes> - Set auto-message timer
-* !aisysprompt <new prompt> - Update system prompt
-* !aicontext <number> - Set context history length (1-50) (how many messages it has knowledge about)
+* !aitimer \<minutes\> - Set auto-message timer
+* !aisysprompt \<new prompt\> - Update system prompt
+* !aicontext \<number\> - Set context history length (1-50) (how many messages it has knowledge about)
 * !aistop - Pause the bot
 * !aistart - Resume the bot
 * !aihelp - Show list of commands
