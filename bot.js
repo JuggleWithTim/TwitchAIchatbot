@@ -24,13 +24,15 @@ const SETTINGS = {
   enableAutoMessages: true, // Set to false to disable auto-messages
 };
 
-// === SYSTEM PROMPT === //
-let SYSTEM_PROMPT = `
+// === SYSTEM PROMPTS === //
+const DEFAULT_SYSTEM_PROMPT = `
 You are @botusername, a friendly and goofy Twitch chatbot.
 Keep your responses concise and engaging.
 You can not send messages longer than 423 characters.
 Your mission is to interact with the chat like you are a natural part of the conversation.
 `;
+
+let SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;  // Initialize default system prompt
 
 // Initialize the OpenAI client
 const openai = new OpenAI({
@@ -187,6 +189,13 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
     return;
   }
+  
+  if (message.toLowerCase() === '!airesetprompt' && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
+    twitchClient.say(channel, 'System prompt reset to default! 🔄');
+    messageHistory.push(`${SETTINGS.username}: System prompt reset to default! 🔄`);
+    return;
+  }
 
   // Command: !aistop - Pause the bot
   if (message.toLowerCase() === '!aistop' && (isBroadcaster || isModerator || isJuggleWithTim)) {
@@ -228,6 +237,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       !aiauto - Toggle auto-messages on/off | 
       !aitimer <minutes> - Set auto-message timer | 
       !aisysprompt <new prompt> - Update system prompt | 
+	  !airesetprompt - Reset to default prompt |
       !aicontext <number> - Set context history length (1-50) | 
       !aistop - Pause the bot | 
       !aistart - Resume the bot | 
@@ -304,3 +314,4 @@ twitchClient.connect().then(() => {
 }).catch((err) => {
   console.error('Failed to connect to Twitch chat:', err);
 });
+
