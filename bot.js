@@ -237,7 +237,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       !aiauto - Toggle auto-messages on/off | 
       !aitimer <minutes> - Set auto-message timer | 
       !aisysprompt <new prompt> - Update system prompt | 
-	  !airesetprompt - Reset to default prompt |
+      !airesetprompt - Reset to default prompt |
       !aicontext <number> - Set context history length (1-50) | 
       !aistop - Pause the bot | 
       !aistart - Resume the bot | 
