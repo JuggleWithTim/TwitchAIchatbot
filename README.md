@@ -7,6 +7,7 @@ Twitch chatbot using chat history as context for Ollama or OpenAI LLMs
 * Adjustable context length (how many messages back it has knowledge about)
 * Support for reasoning models (hides think tags and its content from chat output)
 * Option to use OpenAI's API instead of a local Ollama model
+* Generate images with DALLE 3
 
 ## Chat commands
 * !aiauto - Toggle auto-messages on/off
