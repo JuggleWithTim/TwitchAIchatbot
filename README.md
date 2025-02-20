@@ -12,9 +12,11 @@ Twitch chatbot using chat history as context for Ollama or OpenAI LLMs
 * !aiauto - Toggle auto-messages on/off
 * !aitimer \<minutes\> - Set auto-message timer
 * !aisysprompt \<new prompt\> - Update system prompt
+* !airesetprompt - Resets the system prompt to default
 * !aicontext \<number\> - Set context history length (1-50) (how many messages it has knowledge about)
 * !aistop - Pause the bot
 * !aistart - Resume the bot
+* !imagine \<image description\> - Generates an image with DALLE 3
 * !aihelp - Show list of commands
 
 ## Cloud hosting
@@ -33,7 +35,7 @@ If you don't want to bother setting this up yourself and want it always availabl
 ### 3. Install Dependencies
 * Open the command prompt and navigate to the folder containing bot.js
 `cd /path/to/TwitchOllama`
-* Install required npm packages with `npm install tmi.js axios openai`
+* Install required npm packages with `npm install tmi.js axios openai fs path`
 * Make sure Ollama has the model you want to use installed. Run `ollama run llama3.2` in the command prompt to install the default model.
 
 ### 4. Configure the Bot
