@@ -2,26 +2,35 @@
 const tmi = require('tmi.js'); // Twitch chat client
 const axios = require('axios'); // For making HTTP requests to Ollama
 const { OpenAI } = require('openai'); // OpenAI Node.js module
+const fs = require('fs').promises;
+const path = require('path');
 
 // === USER SETTINGS === //
 const SETTINGS = {
   // Twitch bot credentials
   username: 'botusername', // Replace with your bot's Twitch username
-  password: 'oauth:00000000000000000000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
+  password: 'oauth:000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
   channel: 'channelname', // Replace with the channel name where the bot will join
 
   // API settings
-  useOpenAI: false, // Set to true to use OpenAI, false to use Ollama
+  useOpenAI: true, // Set to true to use OpenAI, false to use Ollama
   ollamaApiUrl: 'http://localhost:11434/api/generate', // Ollama API endpoint
   ollamaModelName: 'llama3.2', // Ollama model to use
-  openaiApiKey: '0000000000000000000000', // Replace with your OpenAI API key
+  openaiApiKey: '000', // Replace with your OpenAI API key
   openaiModelName: 'gpt-4o-mini', // OpenAI model to use (e.g., gpt-3.5-turbo, gpt-4o-mini, gpt-4o)
 
   // Default behavior settings (can be changed during runtime using commands)
   maxHistoryLength: 15, // Number of messages to keep in history
-  inactivityThreshold: 10 * 60 * 1000, // 10 minutes in milliseconds (time before sending an auto-message)
+  inactivityThreshold: 15 * 60 * 1000, // 10 minutes in milliseconds (time before sending an auto-message)
   fallbackMessage: 'Ooooops, something went wrong', // If the response ends up empty, reply with this instead.
   enableAutoMessages: true, // Set to false to disable auto-messages
+  
+  // Image generation settings
+  imageOutputDir: '/home/user/web/example.com/public_html/juggleai', // Where to save generated images
+  imagePublicUrl: 'https://example.com/juggleai', // Public URL path for images
+  imageSize: '1024x1024', // DALL-E 3 supported sizes: 1024x1024, 1792x1024, or 1024x1792
+  imageQuality: 'hd', // 'hd' for enhanced detail
+  quotaLimit: 10, // Maximum image generations between restarts/resets
 };
 
 // === SYSTEM PROMPTS === //
@@ -57,6 +66,9 @@ let lastBotMentionTime = Date.now();
 
 // Flag to track if the bot is paused
 let botPaused = false;
+
+// Track image generation quota
+let quotaUsage = 0;
 
 // Function to call Ollama or OpenAI API
 async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
@@ -114,7 +126,7 @@ async function sendAutoMessage(channel) {
   const context = messageHistory.join('\n');
 
   // Generate a message based on the context
-  let response = await getChatResponse('Please respond to the chat as if you are a part of the conversation', context);
+  let response = await getChatResponse('Please respond to the chat as if you are a part of the conversation. Do not include your own name at the start.', context);
 
   // Remove <think> tags (including content) from the response
   response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
@@ -231,6 +243,83 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     return;
   }
   
+
+ // Image generation command !imagine <image description>
+if (message.toLowerCase().startsWith('!imagine ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
+  // Check quota first
+  if (quotaUsage >= SETTINGS.quotaLimit) {
+    twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day). Ask JuggleWithTim to reset quota!`);
+    return;
+  }
+
+  // Check if OpenAI is enabled and configured
+  if (!SETTINGS.useOpenAI || !SETTINGS.openaiApiKey) {
+    twitchClient.say(channel, '⚠️ Image generation requires OpenAI API to be enabled and configured');
+    return;
+  }
+
+  // Extract the image description
+  const prompt = message.slice('!imagine '.length).trim();
+  if (!prompt) {
+    twitchClient.say(channel, '⚠️ Please provide an image description (e.g., !imagine a cat wearing a spacesuit)');
+    return;
+  }
+
+  try {
+    quotaUsage++; // Increment counter immediately to prevent race conditions
+
+    // Generate the image using DALL-E 3
+    const response = await openai.images.generate({
+      model: 'dall-e-3',
+      prompt,
+      n: 1,
+      size: SETTINGS.imageSize,
+      quality: SETTINGS.imageQuality,
+      response_format: 'url'
+    });
+
+    const imageUrl = response.data[0].url;
+    const imageBuffer = await axios.get(imageUrl, { responseType: 'arraybuffer' })
+      .then(response => Buffer.from(response.data, 'binary'));
+
+    // Ensure output directory exists
+    await fs.mkdir(SETTINGS.imageOutputDir, { recursive: true });
+
+    // Generate filename
+    const filename = `dalle_${Date.now()}.png`;
+    const filePath = path.join(SETTINGS.imageOutputDir, filename);
+
+    // Save image to server
+    await fs.writeFile(filePath, imageBuffer);
+
+    // Create public URL
+    const publicUrl = `${SETTINGS.imagePublicUrl}/${filename}`;
+    
+    twitchClient.say(channel, `🖼️ Generated image (${quotaUsage}/${SETTINGS.quotaLimit}): ${publicUrl}`);
+    messageHistory.push(`${SETTINGS.username}: Generated image for "${prompt}"`);
+  } catch (error) {
+    // If failure occurred after incrementing, decrement the counter
+    quotaUsage = Math.max(0, quotaUsage - 1);
+    
+    console.error('Image generation error:', error);
+    let errorMessage = '⚠️ Failed to generate image';
+    
+    if (error.response?.data?.error?.code === 'content_policy_violation') {
+      errorMessage += ' (content policy violation)';
+    }
+    
+    twitchClient.say(channel, errorMessage);
+  }
+  return;
+}
+
+  // Command: !airesetquota - Reset image generation quota
+  if (message.toLowerCase() === '!airesetquota' && tags.username.toLowerCase() === 'jugglewithtim') {
+    quotaUsage = 0;
+    twitchClient.say(channel, '✅ Image generation quota has been reset!');
+    return;
+  }
+
   // Command: !aihelp - Display available commands
   if (message.toLowerCase() === '!aihelp' && (isBroadcaster || isModerator || isJuggleWithTim)) {
     const helpMessage = `Available commands: 
@@ -241,6 +330,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       !aicontext <number> - Set context history length (1-50) | 
       !aistop - Pause the bot | 
       !aistart - Resume the bot | 
+	  !imagine <description> - Generate AI image (DALL-E 3) |
       !aihelp - Show this help message`;
 
     
@@ -314,4 +404,5 @@ twitchClient.connect().then(() => {
 }).catch((err) => {
   console.error('Failed to connect to Twitch chat:', err);
 });
+
 
