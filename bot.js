@@ -21,27 +21,33 @@ const SETTINGS = {
 
   // Default behavior settings (can be changed during runtime using commands)
   maxHistoryLength: 15, // Number of messages to keep in history
-  inactivityThreshold: 15 * 60 * 1000, // 10 minutes in milliseconds (time before sending an auto-message)
+  inactivityThreshold: 15 * 60 * 1000, // 15 minutes in milliseconds (time before sending an auto-message)
   fallbackMessage: 'Ooooops, something went wrong', // If the response ends up empty, reply with this instead.
   enableAutoMessages: true, // Set to false to disable auto-messages
   
   // Image generation settings
-  imageOutputDir: '/home/user/web/example.com/public_html/juggleai', // Where to save generated images
-  imagePublicUrl: 'https://example.com/juggleai', // Public URL path for images
+  imageOutputDir: '/home/tim/web/jugglewithtim.com/public_html/juggleai', // Where to save generated images
+  imagePublicUrl: 'https://jugglewithtim.com/juggleai', // Public URL path for images
   imageSize: '1024x1024', // DALL-E 3 supported sizes: 1024x1024, 1792x1024, or 1024x1792
-  imageQuality: 'hd', // 'hd' for enhanced detail
-  quotaLimit: 10, // Maximum image generations between restarts/resets
+  imageQuality: 'standard', // 'hd' for enhanced detail
+  quotaLimit: 5, // Maximum image generations between restarts/resets
 };
 
 // === SYSTEM PROMPTS === //
-const DEFAULT_SYSTEM_PROMPT = `
-You are @botusername, a friendly and goofy Twitch chatbot.
-Keep your responses concise and engaging.
-You can not send messages longer than 423 characters.
-Your mission is to interact with the chat like you are a natural part of the conversation.
+const CORE_SYSTEM_PROMPT = `
+You are @${SETTINGS.username}, a Twitch chatbot in ${SETTINGS.channel}'s channel.
+- Keep responses under 423 characters
+- Use casual, chat-friendly language
+- Maintain lighthearted and engaging tone
+- Remember you're in a fast-paced live chat environment
 `;
 
-let SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;  // Initialize default system prompt
+const DEFAULT_ADDITIONAL_PROMPT = `
+You have an interest in juggling and flow arts.
+`;
+
+// Initialize combined default prompt
+let SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\n${DEFAULT_ADDITIONAL_PROMPT}`;
 
 // Initialize the OpenAI client
 const openai = new OpenAI({
@@ -69,6 +75,7 @@ let botPaused = false;
 
 // Track image generation quota
 let quotaUsage = 0;
+let quotaResetTimer = null;
 
 // Function to call Ollama or OpenAI API
 async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
@@ -192,7 +199,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   if (message.toLowerCase().startsWith('!aisysprompt ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
     const newSystemPrompt = message.slice('!aisysprompt '.length).trim();
     if (newSystemPrompt) {
-      SYSTEM_PROMPT = newSystemPrompt;
+      // Merge with core prompt
+      SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${newSystemPrompt}`;
       twitchClient.say(channel, 'System prompt updated successfully! ✅');
       messageHistory.push(`${SETTINGS.username}: System prompt updated successfully! ✅`);
     } else {
@@ -203,7 +211,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
   
   if (message.toLowerCase() === '!airesetprompt' && (isBroadcaster || isModerator || isJuggleWithTim)) {
-    SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
+    SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\n${DEFAULT_ADDITIONAL_PROMPT}`;
     twitchClient.say(channel, 'System prompt reset to default! 🔄');
     messageHistory.push(`${SETTINGS.username}: System prompt reset to default! 🔄`);
     return;
@@ -242,7 +250,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
     return;
   }
-  
 
  // Image generation command !imagine <image description>
 if (message.toLowerCase().startsWith('!imagine ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
@@ -316,6 +323,7 @@ if (message.toLowerCase().startsWith('!imagine ') && (isBroadcaster || isModerat
   // Command: !airesetquota - Reset image generation quota
   if (message.toLowerCase() === '!airesetquota' && tags.username.toLowerCase() === 'jugglewithtim') {
     quotaUsage = 0;
+    startQuotaResetTimer();
     twitchClient.say(channel, '✅ Image generation quota has been reset!');
     return;
   }
@@ -330,15 +338,13 @@ if (message.toLowerCase().startsWith('!imagine ') && (isBroadcaster || isModerat
       !aicontext <number> - Set context history length (1-50) | 
       !aistop - Pause the bot | 
       !aistart - Resume the bot | 
-	  !imagine <description> - Generate AI image (DALL-E 3) |
+      !imagine <description> - Generate AI image (DALL-E 3) |
       !aihelp - Show this help message`;
 
-    
     twitchClient.say(channel, helpMessage);
     messageHistory.push(`${SETTINGS.username}: ${helpMessage}`);
     return;
   }
-
 
   // === NORMAL MESSAGE HANDLING === //
   // Check if the bot is paused
@@ -398,11 +404,24 @@ setInterval(() => {
   sendAutoMessage(SETTINGS.channel);
 }, 60000); // Check every minute
 
+function startQuotaResetTimer() {
+  const resetInterval = 24 * 60 * 60 * 1000; // 24 hours
+  
+  // Clear existing timer if any
+  if (quotaResetTimer) clearInterval(quotaResetTimer);
+  
+  quotaResetTimer = setInterval(() => {
+    quotaUsage = 0;
+    console.log('Image generation quota has been automatically reset');
+    twitchClient.say(SETTINGS.channel, '🕛 Image generation quota has been reset! Use !imagine to generate!');
+  }, resetInterval);
+}
+
+startQuotaResetTimer();
+
 // Connect to Twitch chat
 twitchClient.connect().then(() => {
   console.log('Bot connected to Twitch chat!');
 }).catch((err) => {
   console.error('Failed to connect to Twitch chat:', err);
 });
-
-
