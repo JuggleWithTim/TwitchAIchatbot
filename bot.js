@@ -252,10 +252,10 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
 
  // Image generation command !imagine <image description>
-if (message.toLowerCase().startsWith('!imagine ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
+if (message.toLowerCase().startsWith('!imagine ')) {
   // Check quota first
   if (quotaUsage >= SETTINGS.quotaLimit) {
-    twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day). Ask JuggleWithTim to reset quota!`);
+    twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day).`);
     return;
   }
 
