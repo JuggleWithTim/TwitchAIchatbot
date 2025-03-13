@@ -252,73 +252,109 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
 
  // Image generation command !imagine <image description>
-if (message.toLowerCase().startsWith('!imagine ')) {
-  // Check quota first
-  if (quotaUsage >= SETTINGS.quotaLimit) {
-    twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day).`);
-    return;
-  }
-
-  // Check if OpenAI is enabled and configured
-  if (!SETTINGS.useOpenAI || !SETTINGS.openaiApiKey) {
-    twitchClient.say(channel, '⚠️ Image generation requires OpenAI API to be enabled and configured');
-    return;
-  }
-
-  // Extract the image description
-  const prompt = message.slice('!imagine '.length).trim();
-  if (!prompt) {
-    twitchClient.say(channel, '⚠️ Please provide an image description (e.g., !imagine a cat wearing a spacesuit)');
-    return;
-  }
-
-  try {
-    quotaUsage++; // Increment counter immediately to prevent race conditions
-
-    // Generate the image using DALL-E 3
-    const response = await openai.images.generate({
-      model: 'dall-e-3',
-      prompt,
-      n: 1,
-      size: SETTINGS.imageSize,
-      quality: SETTINGS.imageQuality,
-      response_format: 'url'
-    });
-
-    const imageUrl = response.data[0].url;
-    const imageBuffer = await axios.get(imageUrl, { responseType: 'arraybuffer' })
-      .then(response => Buffer.from(response.data, 'binary'));
-
-    // Ensure output directory exists
-    await fs.mkdir(SETTINGS.imageOutputDir, { recursive: true });
-
-    // Generate filename
-    const filename = `dalle_${Date.now()}.png`;
-    const filePath = path.join(SETTINGS.imageOutputDir, filename);
-
-    // Save image to server
-    await fs.writeFile(filePath, imageBuffer);
-
-    // Create public URL
-    const publicUrl = `${SETTINGS.imagePublicUrl}/${filename}`;
-    
-    twitchClient.say(channel, `🖼️ Generated image (${quotaUsage}/${SETTINGS.quotaLimit}): ${publicUrl}`);
-    messageHistory.push(`${SETTINGS.username}: Generated image for "${prompt}"`);
-  } catch (error) {
-    // If failure occurred after incrementing, decrement the counter
-    quotaUsage = Math.max(0, quotaUsage - 1);
-    
-    console.error('Image generation error:', error);
-    let errorMessage = '⚠️ Failed to generate image';
-    
-    if (error.response?.data?.error?.code === 'content_policy_violation') {
-      errorMessage += ' (content policy violation)';
+  if (message.toLowerCase().startsWith('!imagine') || message.toLowerCase() === '!imagine') {
+    // Check quota first
+    if (quotaUsage >= SETTINGS.quotaLimit) {
+      twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day).`);
+      return;
     }
-    
-    twitchClient.say(channel, errorMessage);
+
+    // Check if OpenAI is enabled and configured
+    if (!SETTINGS.useOpenAI || !SETTINGS.openaiApiKey) {
+      twitchClient.say(channel, '⚠️ Image generation requires OpenAI API to be enabled and configured');
+      return;
+    }
+
+    let prompt;
+    let generatedFromContext = false;
+    const userProvidedPrompt = message.slice('!imagine'.length).trim();
+
+    try {
+      if (!userProvidedPrompt) {
+        // Generate prompt from chat context
+        if (messageHistory.length === 0) {
+          twitchClient.say(channel, '⚠️ No chat history to generate from!');
+          return;
+        }
+
+        const context = messageHistory.slice(-15).join('\n');
+        
+        // Generate DALL-E prompt from context
+        const promptResponse = await openai.chat.completions.create({
+          model: SETTINGS.openaiModelName,
+          messages: [
+            {
+              role: 'system',
+              content: `Generate a concise DALL-E 3 prompt based on recent chat context. Focus on visual elements and key themes. Respond ONLY with the prompt. Format: "Vibrant [style] of [subject], [details], [medium/art style]"`
+            },
+            {
+              role: 'user',
+              content: `Recent chat (latest first):\n${context}\n\nVisual concept:`
+            }
+          ],
+          max_tokens: 300,
+          temperature: 0.7
+        });
+
+        prompt = promptResponse.choices[0].message.content.trim();
+        generatedFromContext = true;
+      } else {
+        prompt = userProvidedPrompt;
+      }
+
+      quotaUsage++; // Increment counter immediately
+
+      // Generate the image using DALL-E 3
+      const imageResponse = await openai.images.generate({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: SETTINGS.imageSize,
+        quality: SETTINGS.imageQuality,
+        response_format: 'url'
+      });
+
+      const imageUrl = imageResponse.data[0].url;
+      const imageBuffer = await axios.get(imageUrl, { responseType: 'arraybuffer' })
+        .then(response => Buffer.from(response.data, 'binary'));
+
+      // Ensure output directory exists
+      await fs.mkdir(SETTINGS.imageOutputDir, { recursive: true });
+
+      // Generate filename
+      const prefix = generatedFromContext ? 'c' : 'm';
+      const filename = `${prefix}_${Date.now()}.png`;
+      const filePath = path.join(SETTINGS.imageOutputDir, filename);
+
+      // Save image to server
+      await fs.writeFile(filePath, imageBuffer);
+
+      // Create public URL
+      const publicUrl = `${SETTINGS.imagePublicUrl}/${filename}`;
+      
+      const responseMessage = generatedFromContext 
+        ? `🎨 Generated from chat context (${quotaUsage}/${SETTINGS.quotaLimit}): ${publicUrl}`
+        : `🖼️ Generated image (${quotaUsage}/${SETTINGS.quotaLimit}): ${publicUrl}`;
+      
+      twitchClient.say(channel, responseMessage);
+      messageHistory.push(`${SETTINGS.username}: ${generatedFromContext ? 'Context image generated' : `Image for "${prompt}"`}`);
+
+    } catch (error) {
+      quotaUsage = Math.max(0, quotaUsage - 1);
+      console.error('Image generation error:', error);
+      
+      let errorMessage = '⚠️ Failed to generate image';
+      if (error.response?.data?.error?.code === 'content_policy_violation') {
+        errorMessage += ' (content policy violation)';
+      }
+      else if (userProvidedPrompt === '') {
+        errorMessage += ' - Could not create concept from chat history';
+      }
+      
+      twitchClient.say(channel, errorMessage);
+    }
+    return;
   }
-  return;
-}
 
   // Command: !airesetquota - Reset image generation quota
   if (message.toLowerCase() === '!airesetquota' && tags.username.toLowerCase() === 'jugglewithtim') {
