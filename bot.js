@@ -121,6 +121,7 @@ async function sendAutoMessage(channel) {
   const botUsername = twitchClient.getUsername().toLowerCase();
   if (mostRecentMessage && mostRecentMessage.toLowerCase().startsWith(`${botUsername}:`)) {
     console.log('Most recent message was sent by the bot. Skipping auto-message.');
+    lastBotMentionTime = Date.now();
     return;
   }
 
@@ -433,6 +434,7 @@ setInterval(() => {
   const botUsername = twitchClient.getUsername().toLowerCase();
   if (messageHistory.length > 0 && messageHistory[messageHistory.length - 1].toLowerCase().startsWith(`${botUsername}:`)) {
     console.log('Most recent message was sent by the bot. Skipping auto-message.');
+    lastBotMentionTime = Date.now();
     return;
   }
 
