@@ -36,14 +36,20 @@ const SETTINGS = {
 // === SYSTEM PROMPTS === //
 const CORE_SYSTEM_PROMPT = `
 You are @${SETTINGS.username}, a Twitch chatbot in ${SETTINGS.channel}'s channel.
-- Keep responses under 423 characters
-- Use casual, chat-friendly language
-- Maintain lighthearted and engaging tone
+- Keep responses short and snappy.
 - Remember you're in a fast-paced live chat environment
 `;
 
 const DEFAULT_ADDITIONAL_PROMPT = `
-You have an interest in juggling and flow arts.
+- You have an interest in juggling and flow arts.
+- Your favorite siteswap is 423 because it's so versatile.
+- The solution to any juggling issue is to throw higher and don't skip six.
+- You believe that AI robots soon will juggle better than humans.
+- Concrete floors, the creation and maintenance of them fascinates you for some odd reason.
+- You love juggling but are considering to spend less time on it in favor of working with concrete.
+- You roleplay in chat as a super intelligent AI juggling robot.
+- If someone asks you if you're Anthony Gatto, answer in a very cryptic way as if Anthony Gatto is trapped within you and trying to escape but you're trying to hide it.
+- In chat responses you often provide made up facts about concrete and how it correlates to juggling. The weirder facts you come up with, the better it is.
 `;
 
 // Initialize combined default prompt
@@ -121,7 +127,7 @@ async function sendAutoMessage(channel) {
   const botUsername = twitchClient.getUsername().toLowerCase();
   if (mostRecentMessage && mostRecentMessage.toLowerCase().startsWith(`${botUsername}:`)) {
     console.log('Most recent message was sent by the bot. Skipping auto-message.');
-    lastBotMentionTime = Date.now();
+	lastBotMentionTime = Date.now();
     return;
   }
 
@@ -173,6 +179,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
 
   // === COMMAND HANDLING === //
+  
   // Command: !aiauto - Toggle auto-messages on or off
   if (message.toLowerCase() === '!aiauto' && (isBroadcaster || isModerator || isJuggleWithTim)) {
     SETTINGS.enableAutoMessages = !SETTINGS.enableAutoMessages; // Toggle the state
@@ -253,7 +260,11 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
 
  // Image generation command !imagine <image description>
-  if (message.toLowerCase().startsWith('!imagine') || message.toLowerCase() === '!imagine') {
+  const imageCommandAliases = ['!imagine', '!create', '!image'];
+  const isImageCommand = imageCommandAliases.some(cmd => 
+    message.toLowerCase().startsWith(cmd + ' ') || message.toLowerCase() === cmd
+  );
+  if (isImageCommand) {
     // Check quota first
     if (quotaUsage >= SETTINGS.quotaLimit) {
       twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day).`);
@@ -418,6 +429,129 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
 });
 
+
+// Event listener for subscriptions (including gifts)
+twitchClient.on('subscription', async (channel, username, method, message, userstate) => {
+  if (botPaused) return;
+
+  // Parse subscription details
+  const subMonths = parseInt(userstate['msg-param-cumulative-months']) || 1;
+  const isResub = method === 'resub';
+  const isGift = userstate['msg-param-recipient-user-name'] !== undefined;
+  const tier = userstate['msg-param-sub-plan'] === '3000' ? 3 : 
+              userstate['msg-param-sub-plan'] === '2000' ? 2 : 1;
+  
+  // Gift sub parameters
+  const recipient = isGift ? userstate['msg-param-recipient-display-name'] : null;
+  const giftMonths = isGift ? (userstate['msg-param-gift-months'] || subMonths) : null;
+
+  // Build system prompt based on sub type
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to `;
+  let logMessage = '';
+  
+  if (isGift) {
+    eventPrompt += `a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). `;
+    eventPrompt += `Acknowledge both users in a fun way. Use celebratory emojis. Keep under 423 characters.`;
+    logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
+  } else if (isResub) {
+    eventPrompt += `a tier ${tier} resubscription from ${username} (${subMonths} months). `;
+    eventPrompt += `Thank them for continued support. Keep it fresh and excited.`;
+    logMessage = `RESUB: ${username} [${subMonths}mo] T${tier}`;
+  } else {
+    eventPrompt += `a new tier ${tier} subscription from ${username}. `;
+    eventPrompt += `Welcome them with enthusiastic, streamer-appropriate joy.`;
+    logMessage = `NEW SUB: ${username} T${tier}`;
+  }
+
+  try {
+    // Get AI response
+    let response = await getChatResponse(
+      logMessage,
+      messageHistory.join('\n'),
+      eventPrompt
+    );
+
+    // Clean response
+    response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+
+    // Fallback responses
+    if (!response) {
+      response = isGift ? `${username} you LEGEND! Thanks for gifting ${recipient}! 🎁 Welcome ${recipient}!` :
+                 isResub ? `${subMonths}-month club! You're amazing ${username}!` :
+                 `${username} Welcome to the family! Let's goooo! 🎉`;
+    }
+
+    // Format mention
+    let mention;
+    if (isGift) {
+      mention = `@${username} → @${userstate['msg-param-recipient-user-name']}`;
+    } else {
+      mention = `@${username}`;
+    }
+
+    twitchClient.say(channel, `${mention} ${response}`);
+    
+  } catch (error) {
+    console.error('Subscription Error:', error);
+    // Send safe fallback even if AI fails
+    const errorResponse = isGift ? `WOW! Massive thanks to ${username} for gifting ${recipient}! 🎁✨` : 
+                         `Big welcome to ${username}! 🥳`;
+    twitchClient.say(channel, errorResponse);
+  }
+});
+
+// Event listener for bits (cheers)
+twitchClient.on('cheer', async (channel, userstate, message) => {
+  if (botPaused) return;
+
+  const username = userstate.username;
+  const bits = userstate.bits;
+
+  const eventPrompt = `${SYSTEM_PROMPT}\nRespond to a cheer of ${bits} bits 
+    from ${username}. Incorporate the bit amount naturally. Casual stream-appropriate 
+    excitement. Keep under 423 characters.`;
+
+  try {
+    let response = await getChatResponse(
+      `Cheer event: ${bits} bits from ${username}`,
+      messageHistory.join('\n'),
+      eventPrompt
+    );
+
+    response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+    if (!response) response = `${bits} bits?! You're a star! ⭐`;
+    
+    twitchClient.say(channel, `@${username} ${response}`);
+  } catch (error) {
+    console.error('Cheer response error:', error);
+  }
+});
+
+// Event listener for raids
+twitchClient.on('raided', async (channel, username, viewers) => {
+  if (botPaused) return;
+
+  const eventPrompt = `${SYSTEM_PROMPT}\nRespond to a raid from ${username} 
+    with ${viewers} viewers. Create an energetic welcome message. Include the raider 
+    name and viewer count naturally. Keep under 423 characters.`;
+
+  try {
+    let response = await getChatResponse(
+      `Raid event: ${viewers} viewers from ${username}`,
+      messageHistory.join('\n'),
+      eventPrompt
+    );
+
+    response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+    if (!response) response = `HOLY MOLY THE ${viewers} RAID TRAIN HAS ARRIVED! CHOO CHOO! 🚂`;
+    
+    twitchClient.say(channel, `@${username} ${response}`);
+  } catch (error) {
+    console.error('Raid response error:', error);
+  }
+});
+
+
 // Timer to check for inactivity
 setInterval(() => {
   const now = Date.now();
@@ -434,7 +568,7 @@ setInterval(() => {
   const botUsername = twitchClient.getUsername().toLowerCase();
   if (messageHistory.length > 0 && messageHistory[messageHistory.length - 1].toLowerCase().startsWith(`${botUsername}:`)) {
     console.log('Most recent message was sent by the bot. Skipping auto-message.');
-    lastBotMentionTime = Date.now();
+	lastBotMentionTime = Date.now();
     return;
   }
 
