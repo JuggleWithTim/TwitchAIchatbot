@@ -11,6 +11,10 @@ const SETTINGS = {
   username: 'botusername', // Replace with your bot's Twitch username
   password: 'oauth:000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
   channel: 'channelname', // Replace with the channel name where the bot will join
+  
+  // Twitch Helix API credentials
+  twitchClientId: '000',
+  twitchClientSecret: '000',
 
   // API settings
   useOpenAI: true, // Set to true to use OpenAI, false to use Ollama
@@ -19,15 +23,17 @@ const SETTINGS = {
   openaiApiKey: '000', // Replace with your OpenAI API key
   openaiModelName: 'gpt-4o-mini', // OpenAI model to use (e.g., gpt-3.5-turbo, gpt-4o-mini, gpt-4o)
 
-  // Default behavior settings (can be changed during runtime using commands)
+  // Default behavior settings
   maxHistoryLength: 15, // Number of messages to keep in history
   inactivityThreshold: 15 * 60 * 1000, // 15 minutes in milliseconds (time before sending an auto-message)
   fallbackMessage: 'Ooooops, something went wrong', // If the response ends up empty, reply with this instead.
   enableAutoMessages: true, // Set to false to disable auto-messages
+  enableShoutoutCommand: true, // Set to false if you have a different bot handling shoutouts with !so <username>
   
   // Image generation settings
-  imageOutputDir: '/home/tim/web/jugglewithtim.com/public_html/juggleai', // Where to save generated images
-  imagePublicUrl: 'https://jugglewithtim.com/juggleai', // Public URL path for images
+  enableImageGeneration: true, // Set to false to not accept image generation commands.
+  imageOutputDir: '/home/tim/web/jugglewithtim.com/public_html/juggleai/jwt', // Where to save generated images
+  imagePublicUrl: 'https://jugglewithtim.com/juggleai/jwt', // Public URL path for images
   imageSize: '1024x1024', // DALL-E 3 supported sizes: 1024x1024, 1792x1024, or 1024x1792
   imageQuality: 'standard', // 'hd' for enhanced detail
   quotaLimit: 5, // Maximum image generations between restarts/resets
@@ -94,7 +100,7 @@ async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
           { role: 'system', content: prompt },
           { role: 'user', content: `Context:\n${context}\n\nUser: ${userMessage}\nBot:` },
         ],
-        max_tokens: 100, // Limit the response length
+        max_tokens: 150, // Limit the response length
       });
       return response.choices[0].message.content.trim();
     } catch (error) {
@@ -179,6 +185,19 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
 
   // === COMMAND HANDLING === //
+  
+  if (message.toLowerCase().startsWith('!so ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
+    if (!SETTINGS.enableShoutoutCommand) return;
+    // Accepts !so username or !so @username
+    const matches = message.trim().match(/^!so\s+@?([a-zA-Z0-9_]{4,25})/i);
+    if (!matches) {
+      twitchClient.say(channel, "Usage: !so <username>");
+      return;
+    }
+    const targetUsername = matches[1].toLowerCase(); // safe to use lower case for Twitch lookups
+    await handleShoutout(channel, targetUsername, tags.username);
+    return;
+  }
   
   // Command: !aiauto - Toggle auto-messages on or off
   if (message.toLowerCase() === '!aiauto' && (isBroadcaster || isModerator || isJuggleWithTim)) {
@@ -265,6 +284,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     message.toLowerCase().startsWith(cmd + ' ') || message.toLowerCase() === cmd
   );
   if (isImageCommand) {
+    if (!SETTINGS.enableImageGeneration) return;
     // Check quota first
     if (quotaUsage >= SETTINGS.quotaLimit) {
       twitchClient.say(channel, `⚠️ Image generation limit reached (${SETTINGS.quotaLimit}/day).`);
@@ -500,6 +520,9 @@ twitchClient.on('subscription', async (channel, username, method, message, users
   }
 });
 
+
+
+
 // Event listener for bits (cheers)
 twitchClient.on('cheer', async (channel, userstate, message) => {
   if (botPaused) return;
@@ -590,6 +613,170 @@ function startQuotaResetTimer() {
 }
 
 startQuotaResetTimer();
+
+let twitchAppToken = null;
+let twitchTokenExpiry = 0;
+
+// Twitch helix API stuff
+async function getTwitchAppToken() {
+  if (twitchAppToken && Date.now() < twitchTokenExpiry) return twitchAppToken;
+  const resp = await axios.post(
+    'https://id.twitch.tv/oauth2/token',
+    null,
+    {
+      params: {
+        client_id: SETTINGS.twitchClientId,
+        client_secret: SETTINGS.twitchClientSecret,
+        grant_type: 'client_credentials'
+      }
+    }
+  );
+  twitchAppToken = resp.data.access_token;
+  // expires_in is in seconds
+  twitchTokenExpiry = Date.now() + (resp.data.expires_in - 60) * 1000;
+  return twitchAppToken;
+}
+
+async function fetchTwitchUser(username) {
+  const token = await getTwitchAppToken();
+  const userResp = await axios.get('https://api.twitch.tv/helix/users', {
+    params: { login: username },
+    headers: {
+      'Client-ID': SETTINGS.twitchClientId,
+      'Authorization': 'Bearer ' + token
+    }
+  });
+  return userResp.data.data[0]; // If user not found, this will be undefined.
+}
+
+async function fetchLatestStream(userId) {
+  const token = await getTwitchAppToken();
+
+  // 1. Live check
+  const streamResp = await axios.get('https://api.twitch.tv/helix/streams', {
+    params: { user_id: userId, first: 1 },
+    headers: {
+      'Client-ID': SETTINGS.twitchClientId,
+      'Authorization': 'Bearer ' + token
+    }
+  });
+
+  let streamData = streamResp.data.data[0];
+  if (streamData) return normalizeStreamData(streamData, userId, token);
+
+  // 2. Last stream (archive)
+  const vidsResp = await axios.get('https://api.twitch.tv/helix/videos', {
+    params: { user_id: userId, first: 1, type: 'archive' },
+    headers: {
+      'Client-ID': SETTINGS.twitchClientId,
+      'Authorization': 'Bearer ' + token
+    }
+  });
+
+  let lastStream = vidsResp.data.data[0];
+  if (lastStream) return await normalizeStreamData(lastStream, userId, token);
+
+  // 3. No content
+  return null;
+}
+
+
+async function normalizeStreamData(streamData, userId, token) {
+  if (!streamData) return null;
+
+  if ('started_at' in streamData) {
+    // This is a live stream (/streams)
+    return {
+      title: streamData.title,
+      game_name: streamData.game_name,
+      tags: streamData.tags || [],
+      started_at: streamData.started_at,
+      isLive: true
+    };
+  } else if ('created_at' in streamData) {
+    // This is from /videos (past broadcast)
+    let gameName = null;
+    // You need to lookup game_name from game_id!
+    if (streamData.game_id && streamData.game_id !== '0') {
+      const resp = await axios.get('https://api.twitch.tv/helix/games', {
+        params: { id: streamData.game_id },
+        headers: {
+          'Client-ID': SETTINGS.twitchClientId,
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      gameName = resp.data.data[0]?.name || null;
+    }
+
+    return {
+      title: streamData.title,
+      game_name: gameName,
+      tags: [], // videos endpoint does not give tags
+      started_at: streamData.created_at,
+      isLive: false
+    };
+  }
+  // Unknown type!
+  return null;
+}
+
+
+async function handleShoutout(channel, targetUsername, requestedBy) {
+  const cleanUsername = targetUsername.replace(/^@/, '');
+
+  try {
+    const user = await fetchTwitchUser(cleanUsername);
+    if (!user) {
+      twitchClient.say(channel, `Couldn't find a user called "${cleanUsername}". 👻`);
+      return;
+    }
+
+    const latestStream = await fetchLatestStream(user.id);
+
+    // Compose context for AI
+    let soContext = `About @${user.display_name} (${user.login}):\n`;
+    if (user.description) soContext += `Bio: ${user.description}\n`;
+    soContext += `Twitch Profile: https://twitch.tv/${user.login}\n`;
+
+    if (latestStream) {
+      soContext += `Most recent stream title: "${latestStream.title}"\n`;
+      soContext += `Game: ${latestStream.game_name || "Unknown"}\n`;
+
+      // Only include tags if present (archives won't have them)
+      if (latestStream.tags && latestStream.tags.length) {
+        soContext += `Tags: ${latestStream.tags.join(", ")}\n`;
+      }
+
+      if (latestStream.isLive) {
+        soContext += `Status: Currently LIVE! Stream started at ${latestStream.started_at}\n`;
+      } else {
+        soContext += `Status: Currently offline. Last stream was at ${latestStream.started_at}\n`;
+      }
+    } else {
+      soContext += `Status: No recent streams found.\n`;
+    }
+
+    const soUserMsg = `Generate a shoutout for ${user.display_name} that will hype up viewers to check their channel. Include information about their latest stream. Include their Twitch link ("https://twitch.tv/${user.login}") as-is, with no punctuation (like ! or .) immediately after the link. `;
+
+    let aiSoMsg = await getChatResponse(soUserMsg, soContext, SYSTEM_PROMPT);
+
+    // Fallback
+    if (!aiSoMsg) aiSoMsg = `Go check out @${user.display_name} at https://twitch.tv/${user.login}!`;
+    
+    aiSoMsg = sanitizeTwitchLinks(aiSoMsg);
+
+    twitchClient.say(channel, aiSoMsg);
+  } catch (err) {
+    console.error('Shoutout error:', err?.response?.data || err);
+    twitchClient.say(channel, `Couldn't shoutout "${cleanUsername}" (maybe invalid name or rate-limited).`);
+  }
+}
+
+
+function sanitizeTwitchLinks(msg) {
+  return msg.replace(/(https:\/\/twitch\.tv\/[a-zA-Z0-9_]+)([.,!?)])/g, '$1 $2');
+}
+
 
 // Connect to Twitch chat
 twitchClient.connect().then(() => {
