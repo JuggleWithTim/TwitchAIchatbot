@@ -18,6 +18,7 @@ Twitch chatbot using chat history as context for Ollama or OpenAI LLMs
 * !aistop - Pause the bot
 * !aistart - Resume the bot
 * !imagine \<image description\> - Generates an image with DALLE 3
+* !so \<username\> A shoutout command that crafts unique messages based on the profile page and recent stream of the user getting the shoutout.
 * !aihelp - Show list of commands
 
 ## Cloud hosting
