@@ -43,7 +43,8 @@ const SETTINGS = {
 const CORE_SYSTEM_PROMPT = `
 You are @${SETTINGS.username}, a Twitch chatbot in ${SETTINGS.channel}'s channel.
 - Keep responses short and snappy.
-- Remember you're in a fast-paced live chat environment
+- Remember you're in a fast-paced live chat environment.
+- Do not include your own name at the start of messages.
 `;
 
 const DEFAULT_ADDITIONAL_PROMPT = `
