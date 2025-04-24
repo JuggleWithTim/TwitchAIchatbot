@@ -640,7 +640,7 @@ function startQuotaResetTimer() {
   quotaResetTimer = setInterval(() => {
     quotaUsage = 0;
     console.log('Image generation quota has been automatically reset');
-	if (!SETTINGS.enableQuotaNotification) return;
+    if (!SETTINGS.enableQuotaNotification) return;
     twitchClient.say(SETTINGS.channel, '🕛 Image generation quota has been reset! Use !imagine to generate!');
   }, resetInterval);
 }
