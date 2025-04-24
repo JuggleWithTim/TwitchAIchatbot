@@ -8,9 +8,9 @@ const path = require('path');
 // === USER SETTINGS === //
 const SETTINGS = {
   // Twitch bot credentials
-  username: 'botusername', // Replace with your bot's Twitch username
+  username: 'anthonybotto', // Replace with your bot's Twitch username
   password: 'oauth:000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
-  channel: 'channelname', // Replace with the channel name where the bot will join
+  channel: 'jugglewithtim', // Replace with the channel name where the bot will join
   
   // Twitch Helix API credentials
   twitchClientId: '000',
@@ -25,13 +25,15 @@ const SETTINGS = {
 
   // Default behavior settings
   maxHistoryLength: 15, // Number of messages to keep in history
-  inactivityThreshold: 15 * 60 * 1000, // 15 minutes in milliseconds (time before sending an auto-message)
+  inactivityThreshold: 20 * 60 * 1000, // 20 minutes in milliseconds (time before sending an auto-message)
   fallbackMessage: 'Ooooops, something went wrong', // If the response ends up empty, reply with this instead.
   enableAutoMessages: true, // Set to false to disable auto-messages
-  enableShoutoutCommand: true, // Set to false if you have a different bot handling shoutouts with !so <username>
+  enableShoutoutCommand: true, // Set to false to deactivate the !so command, for example if you have a different bot handling the same command.
+  enableHugCommand: true, // Set to false to deactivate the !hug command, for example if you have a different bot handling the same command.
   
   // Image generation settings
   enableImageGeneration: true, // Set to false to not accept image generation commands.
+  enableQuotaNotification: false, // If true, a chat message is sent when daily quota is reset.
   imageOutputDir: '/home/tim/web/jugglewithtim.com/public_html/juggleai/jwt', // Where to save generated images
   imagePublicUrl: 'https://jugglewithtim.com/juggleai/jwt', // Public URL path for images
   imageSize: '1024x1024', // DALL-E 3 supported sizes: 1024x1024, 1792x1024, or 1024x1792
@@ -56,7 +58,7 @@ const DEFAULT_ADDITIONAL_PROMPT = `
 - You love juggling but are considering to spend less time on it in favor of working with concrete.
 - You roleplay in chat as a super intelligent AI juggling robot.
 - If someone asks you if you're Anthony Gatto, answer in a very cryptic way as if Anthony Gatto is trapped within you and trying to escape but you're trying to hide it.
-- In chat responses you often provide made up facts about concrete and how it correlates to juggling. The weirder facts you come up with, the better it is.
+- In chat responses you often provide very strange made up facts about concrete and how it correlates to juggling.
 `;
 
 // Initialize combined default prompt
@@ -186,6 +188,35 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
 
   // === COMMAND HANDLING === //
+
+  // Command: !aibot - Bot self promo
+  if (message.toLowerCase().startsWith('!aibot')) {
+    twitchClient.say(channel, "I'm powered by JuggleAI! Check it out here: https://jugglewithtim.com/juggleai/");
+    return;
+  }
+  
+  // Command: !hug <username>
+  const hugMatch = message.trim().match(/^!hug\s+@?([a-zA-Z0-9_]+)$/i);
+  if (hugMatch) {
+    if (!SETTINGS.enableHugCommand) return;
+    const hugReceiver = hugMatch[1]; // The receiver's username
+    const hugGiver = tags['display-name'] || tags.username;
+
+    // Prompt for AI to ensure SYSTEM_PROMPT personality
+    const hugPrompt = 
+      `Tell the chat (in your normal style and personality) that @${hugGiver} gives a hug to @${hugReceiver}. Make it friendly.`;
+
+    const context = messageHistory.join('\n');
+    let response = await getChatResponse(hugPrompt, context, SYSTEM_PROMPT);
+    if (!response) {
+      response = `@${hugGiver} gives a big hug to @${hugReceiver}! 🤗`;
+    }
+
+    response = response.replace(/(@[a-zA-Z0-9_]+)([.!?,:;])/g, '$1 $2');
+    twitchClient.say(channel, response);
+    messageHistory.push(`${SETTINGS.username}: ${response}`);
+    return;
+  }
   
   if (message.toLowerCase().startsWith('!so ') && (isBroadcaster || isModerator || isJuggleWithTim)) {
     if (!SETTINGS.enableShoutoutCommand) return;
@@ -609,6 +640,7 @@ function startQuotaResetTimer() {
   quotaResetTimer = setInterval(() => {
     quotaUsage = 0;
     console.log('Image generation quota has been automatically reset');
+	if (!SETTINGS.enableQuotaNotification) return;
     twitchClient.say(SETTINGS.channel, '🕛 Image generation quota has been reset! Use !imagine to generate!');
   }, resetInterval);
 }
