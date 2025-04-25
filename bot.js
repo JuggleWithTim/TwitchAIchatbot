@@ -30,6 +30,7 @@ const SETTINGS = {
   enableAutoMessages: true, // Set to false to disable auto-messages
   enableShoutoutCommand: true, // Set to false to deactivate the !so command, for example if you have a different bot handling the same command.
   enableHugCommand: true, // Set to false to deactivate the !hug command, for example if you have a different bot handling the same command.
+  enableWaifuCommand: true, // Set to false to deactivate the !waifu command
   
   // Image generation settings
   enableImageGeneration: true, // Set to false to not accept image generation commands.
@@ -38,7 +39,7 @@ const SETTINGS = {
   imagePublicUrl: 'https://jugglewithtim.com/juggleai/jwt', // Public URL path for images
   imageSize: '1024x1024', // DALL-E 3 supported sizes: 1024x1024, 1792x1024, or 1024x1792
   imageQuality: 'standard', // 'hd' for enhanced detail
-  quotaLimit: 5, // Maximum image generations between restarts/resets
+  quotaLimit: 10, // Maximum image generations between restarts/resets
 };
 
 // === SYSTEM PROMPTS === //
@@ -125,6 +126,16 @@ async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
       return 'Sorry, I encountered an error while generating a response.';
     }
   }
+}
+
+let waifus = [];
+
+function addWaifuSystemPrompt() {
+  let waifuPrompt = '';
+  if (waifus.length > 0) {
+    waifuPrompt = `You are the waifu of these people: ${waifus.join(', ')}`;
+  }
+  SYSTEM_PROMPT = `${SYSTEM_PROMPT}\n${waifuPrompt}`;
 }
 
 // Function to send a message based on the message history
@@ -231,6 +242,42 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     return;
   }
   
+  if (message.toLowerCase() === '!waifu') {
+    if (!SETTINGS.enableWaifuCommand) return;
+    const username = tags.username;
+    if (!waifus.includes(username)) {
+      waifus.push(username);
+      twitchClient.say(channel, `@${username} I love you! 💖 UwU`);
+    } else {
+      twitchClient.say(channel, `@${username}, you're already on my waifu list my love! 💖 UwU`);
+    }
+    addWaifuSystemPrompt();
+    return;
+  }
+
+  if (message.toLowerCase() === '!unwaifu') {
+    if (!SETTINGS.enableWaifuCommand) return;
+    const username = tags.username;
+    if (waifus.includes(username)) {
+      waifus = waifus.filter(u => u !== username);
+      twitchClient.say(channel, `@${username} broke up with me 💔`);
+      addWaifuSystemPrompt();
+    } else {
+      twitchClient.say(channel, `@${username}, you're not on the waifu list!`);
+    }
+    return;
+  }
+
+  if (message.toLowerCase() === '!waifulist') {
+    if (!SETTINGS.enableWaifuCommand) return;
+    if (waifus.length === 0) {
+      twitchClient.say(channel, "Nobody is on the waifu list yet! 💔");
+    } else {
+      twitchClient.say(channel, "My waifus: " + waifus.map(u => '@' + u).join(', ') + " 💖");
+    }
+    return;
+  }
+  
   // Command: !aiauto - Toggle auto-messages on or off
   if (message.toLowerCase() === '!aiauto' && (isBroadcaster || isModerator || isJuggleWithTim)) {
     SETTINGS.enableAutoMessages = !SETTINGS.enableAutoMessages; // Toggle the state
@@ -260,6 +307,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     if (newSystemPrompt) {
       // Merge with core prompt
       SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${newSystemPrompt}`;
+      addWaifuSystemPrompt();
       twitchClient.say(channel, 'System prompt updated successfully! ✅');
       messageHistory.push(`${SETTINGS.username}: System prompt updated successfully! ✅`);
     } else {
@@ -271,6 +319,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   
   if (message.toLowerCase() === '!airesetprompt' && (isBroadcaster || isModerator || isJuggleWithTim)) {
     SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\n${DEFAULT_ADDITIONAL_PROMPT}`;
+    addWaifuSystemPrompt();
     twitchClient.say(channel, 'System prompt reset to default! 🔄');
     messageHistory.push(`${SETTINGS.username}: System prompt reset to default! 🔄`);
     return;
@@ -453,32 +502,28 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   // Check if the bot is mentioned in the message
   const botUsername = twitchClient.getUsername().toLowerCase();
   if (message.toLowerCase().includes(botUsername)) {
-    // Update the last mention time
     lastBotMentionTime = Date.now();
 
-    // Extract the user's message without the bot's mention
     const userMessage = message.replace(new RegExp(`@${botUsername}`, 'i'), '').trim();
-
-    // Get the recent conversation context
     const context = messageHistory.join('\n');
 
-    // Get a response from the chosen API
-    let response = await getChatResponse(userMessage, context);
+    let prompt = SYSTEM_PROMPT;
+    if (waifus.includes(tags.username)) {
+      prompt += '\nRemember, you are the waifu of this user UwU, respond with extra love and passion.';
+    }
 
-    // Remove <think> tags (including content) from the response
+    let response = await getChatResponse(userMessage, context, prompt);
+
     response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
 
-    // If the response is empty, send a default message
     if (!response) {
       response = SETTINGS.fallbackMessage;
     }
 
-    // Send the cleaned response back to the chat
     twitchClient.say(channel, `@${tags.username}, ${response}`);
-
-    // Add the bot's message to history
     messageHistory.push(`${SETTINGS.username}: ${response}`);
   }
+
 });
 
 
