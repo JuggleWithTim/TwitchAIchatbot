@@ -1,4 +1,4 @@
-# TwitchOllama
+# TwitchAIchatbot
 Twitch chatbot using chat history as context for Ollama or OpenAI LLMs
 
 ## Features
