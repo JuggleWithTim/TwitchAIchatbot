@@ -32,11 +32,11 @@ If you don't want to bother setting this up yourself and want it always availabl
 * A Twitch account for the bot and an [OAuth](https://twitchtokengenerator.com/) token.
 
 ### 2. Clone the Repository (or download and unpack zip)
-`git clone https://github.com/JuggleWithTim/TwitchOllama.git`
+`git clone https://github.com/JuggleWithTim/TwitchAIchatbot.git`
 
 ### 3. Install Dependencies
 * Open the command prompt and navigate to the folder containing bot.js
-`cd /path/to/TwitchOllama`
+`cd /path/to/TwitchAIchatbot`
 * Install required npm packages with `npm install tmi.js axios openai fs path`
 * Make sure Ollama has the model you want to use installed. Run `ollama run llama3.2` in the command prompt to install the default model.
 
@@ -46,5 +46,5 @@ If you don't want to bother setting this up yourself and want it always availabl
 * Adjust the DEFAULT_ADDITIONAL_PROMPT from line 46 to your liking.
 
 ### 5. Run the bot
-* Make sure your command prompt is navigated to the bots folder. `cd /path/to/TwitchOllama`
+* Make sure your command prompt is navigated to the bots folder. `cd /path/to/TwitchAIchatbot`
 * Start the bot by running `node bot.js` in your command prompt
