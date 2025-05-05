@@ -6,41 +6,19 @@ const fs = require('fs').promises;
 const path = require('path');
 
 // === USER SETTINGS === //
-const SETTINGS = {
-  // Twitch bot credentials
-  username: 'anthonybotto', // Replace with your bot's Twitch username
-  password: 'oauth:000', // Replace with your bot's OAuth token (get it from https://twitchtokengenerator.com/)
-  channel: 'jugglewithtim', // Replace with the channel name where the bot will join
-  
-  // Twitch Helix API credentials
-  twitchClientId: '000',
-  twitchClientSecret: '000',
+//const fs = require('fs').promises;
 
-  // API settings
-  useOpenAI: true, // Set to true to use OpenAI, false to use Ollama
-  ollamaApiUrl: 'http://localhost:11434/api/generate', // Ollama API endpoint
-  ollamaModelName: 'llama3.2', // Ollama model to use
-  openaiApiKey: '000', // Replace with your OpenAI API key
-  openaiModelName: 'gpt-4o-mini', // OpenAI model to use (e.g., gpt-3.5-turbo, gpt-4o-mini, gpt-4o)
+let SETTINGS = require('./settings.json');
 
-  // Default behavior settings
-  maxHistoryLength: 15, // Number of messages to keep in history
-  inactivityThreshold: 20 * 60 * 1000, // 20 minutes in milliseconds (time before sending an auto-message)
-  fallbackMessage: 'Ooooops, something went wrong', // If the response ends up empty, reply with this instead.
-  enableAutoMessages: true, // Set to false to disable auto-messages
-  enableShoutoutCommand: true, // Set to false to deactivate the !so command, for example if you have a different bot handling the same command.
-  enableHugCommand: true, // Set to false to deactivate the !hug command, for example if you have a different bot handling the same command.
-  enableWaifuCommand: true, // Set to false to deactivate the !waifu command
-  
-  // Image generation settings
-  enableImageGeneration: true, // Set to false to not accept image generation commands.
-  enableQuotaNotification: false, // If true, a chat message is sent when daily quota is reset.
-  imageOutputDir: '/home/tim/web/jugglewithtim.com/public_html/juggleai/jwt', // Where to save generated images
-  imagePublicUrl: 'https://jugglewithtim.com/juggleai/jwt', // Public URL path for images
-  imageSize: '1024x1024', // DALL-E 3 supported sizes: 1024x1024, 1792x1024, or 1024x1792
-  imageQuality: 'standard', // 'hd' for enhanced detail
-  quotaLimit: 10, // Maximum image generations between restarts/resets
-};
+async function saveSettings() {
+  await fs.writeFile('./settings.json', JSON.stringify(SETTINGS, null, 2));
+  SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${SETTINGS.DEFAULT_ADDITIONAL_PROMPT}`;
+  addWaifuSystemPrompt();
+}
+
+// To reload:
+// SETTINGS = require('./settings.json');
+
 
 // === SYSTEM PROMPTS === //
 const CORE_SYSTEM_PROMPT = `
@@ -50,20 +28,9 @@ You are @${SETTINGS.username}, a Twitch chatbot in ${SETTINGS.channel}'s channel
 - Do not include your own name at the start of messages.
 `;
 
-const DEFAULT_ADDITIONAL_PROMPT = `
-- You have an interest in juggling and flow arts.
-- Your favorite siteswap is 423 because it's so versatile.
-- The solution to any juggling issue is to throw higher and don't skip six.
-- You believe that AI robots soon will juggle better than humans.
-- Concrete floors, the creation and maintenance of them fascinates you for some odd reason.
-- You love juggling but are considering to spend less time on it in favor of working with concrete.
-- You roleplay in chat as a super intelligent AI juggling robot.
-- If someone asks you if you're Anthony Gatto, answer in a very cryptic way as if Anthony Gatto is trapped within you and trying to escape but you're trying to hide it.
-- In chat responses you often provide very strange made up facts about concrete and how it correlates to juggling.
-`;
 
 // Initialize combined default prompt
-let SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\n${DEFAULT_ADDITIONAL_PROMPT}`;
+let SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${SETTINGS.DEFAULT_ADDITIONAL_PROMPT}`;
 
 // Initialize the OpenAI client
 const openai = new OpenAI({
@@ -318,7 +285,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
   
   if (message.toLowerCase() === '!airesetprompt' && (isBroadcaster || isModerator || isJuggleWithTim)) {
-    SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\n${DEFAULT_ADDITIONAL_PROMPT}`;
+    SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\n${SETTINGS.DEFAULT_ADDITIONAL_PROMPT}`;
     addWaifuSystemPrompt();
     twitchClient.say(channel, 'System prompt reset to default! 🔄');
     messageHistory.push(`${SETTINGS.username}: System prompt reset to default! 🔄`);
@@ -862,3 +829,191 @@ twitchClient.connect().then(() => {
 }).catch((err) => {
   console.error('Failed to connect to Twitch chat:', err);
 });
+
+
+// Web interface
+// Required Packages
+const express = require('express');
+//const fs = require('fs').promises;
+//const path = require('path');
+const app = express();
+const PORT = SETTINGS.webPort;
+
+// File and Config
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
+//let SETTINGS = {}; // loaded dynamically
+
+const SETTINGS_EDITABLE_FIELDS = [
+  "username",
+  "password",
+  "channel",
+  "maxHistoryLength",
+  "inactivityThreshold",
+  "enableAutoMessages",
+  "enableShoutoutCommand",
+  "enableHugCommand",
+  "enableWaifuCommand",
+  "enableImageGeneration",
+  "enableQuotaNotification",
+  "DEFAULT_ADDITIONAL_PROMPT"
+];
+
+const FIELD_LABELS = {
+  username: "Twitch bot username",
+  password: "Twitch oauth password",
+  channel: "Twitch channel",
+  maxHistoryLength: "Context history length",
+  inactivityThreshold: "Auto message Timer",
+  enableAutoMessages: "Auto messages",
+  enableShoutoutCommand: "Shoutout command",
+  enableHugCommand: "Hug command",
+  enableWaifuCommand: "Waifu Commands",
+  enableImageGeneration: "Image Generation",
+  enableQuotaNotification: "Notification for renewed image quota",
+  DEFAULT_ADDITIONAL_PROMPT: "System Prompt"
+};
+
+// Simple Auth for /
+app.use((req, res, next) => {
+  const header = req.headers.authorization || '';
+  const correct = "Basic " + Buffer.from(`${SETTINGS.webUsername}:${SETTINGS.webPassword}`).toString('base64');
+  if (header !== correct) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Admin Area"');
+    return res.status(401).send('Authentication required.');
+  }
+  next();
+});
+
+// Middleware
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Load and Save Settings
+async function loadSettings() {
+  try {
+    const raw = await fs.readFile(SETTINGS_FILE, 'utf-8');
+    SETTINGS = JSON.parse(raw);
+  } catch {
+    SETTINGS = {};
+  }
+}
+async function saveSettings() {
+  await fs.writeFile(SETTINGS_FILE, JSON.stringify(SETTINGS, null, 2), 'utf-8');
+}
+
+// For fields that should be checkboxes (1/0 only)
+const CHECKBOX_FIELDS = [
+  "enableAutoMessages",
+  "enableShoutoutCommand",
+  "enableHugCommand",
+  "enableWaifuCommand",
+  "enableImageGeneration",
+  "enableQuotaNotification"
+];
+
+// Render input fields (checkboxes for certain keys)
+function renderInputField(key, value) {
+  if (CHECKBOX_FIELDS.includes(key)) {
+    // Checkbox: checked if value == 1 (not just truthy, but exactly 1)
+    return `<input type="checkbox" id="${key}" name="${key}" value="1" ${value == 1 ? "checked" : ""}>`;
+  }
+  if (key === "inactivityThreshold") {
+    // Show value in minutes, but internally store in ms
+    let minutes = Math.max(1, Math.round(Number(value) / 60000));
+    return `<input type="number" id="${key}" name="${key}" value="${minutes}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">minutes</span>`;
+  }
+  if (key === "DEFAULT_ADDITIONAL_PROMPT") {
+    return `<textarea id="${key}" name="${key}" rows="10" cols="60">${value}</textarea>`;
+  }
+  if (key === "maxHistoryLength") {
+    return `<input type="number" id="${key}" name="${key}" value="${value}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">messages</span>`;
+  }
+  if (typeof value === "number") {
+    return `<input type="number" id="${key}" name="${key}" value="${value}" />`;
+  }
+  if (typeof value === "string" && value.length > 80) {
+    return `<textarea id="${key}" name="${key}" rows="6" cols="60">${value}</textarea>`;
+  }
+  return `<input type="text" id="${key}" name="${key}" value="${value === undefined ? '' : value}" />`;
+}
+
+// GET /
+app.get('/', async (req, res) => {
+  await loadSettings();
+  let html = `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <title>Twitch AI Bot Settings</title>
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #262729; color: #f2f2f2; padding:40px; }
+        h2 { color: #b080fa; }
+        form { background: #35363a; padding: 24px; border-radius: 12px; max-width: 600px; margin: auto;}
+        .field { margin-bottom: 22px; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; }
+        input[type="text"], input[type="number"], textarea {
+          width: 92%; padding: 7px; border-radius: 5px; border: 1px solid #8070c7; font-size: 1em; background: #202025; color: #fafaff;
+        }
+        input[type="checkbox"] { width: 20px; height: 20px; }
+        textarea { min-height: 80px; }
+        button { background: #b080fa; color: #fff; font-weight: bold; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 1.05em; }
+        button:hover { background: #8253d8;}
+      </style>
+    </head>
+    <body>
+    <h2>Twitch AI Bot Settings</h2>
+    <form method="POST" action="/">
+      ${SETTINGS_EDITABLE_FIELDS.map((k) => {
+        const label = FIELD_LABELS[k] || k;
+        const value = SETTINGS[k];
+        const field = renderInputField(k, value);
+        return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
+      }).join("")}
+      <button type="submit" name="action" value="save">Save</button>
+      <button type="submit" name="action" value="restart" style="background:#e74c3c;margin-left:16px;" onclick="return confirm('Are you sure you want to restart the bot?');">
+        Restart Bot
+      </button>
+    </form>
+    </body>
+  </html>
+  `;
+  res.send(html);
+});
+
+// POST /
+app.post('/', async (req, res) => {
+  await loadSettings();
+
+  // For all editable fields, update SETTINGS accordingly
+  for (const k of SETTINGS_EDITABLE_FIELDS) {
+    let v;
+    if (CHECKBOX_FIELDS.includes(k)) {
+      // Checkbox field: present means checked, missing means unchecked
+      v = req.body[k] === "1" ? 1 : 0;
+    } else if (k === "inactivityThreshold") {
+    v = Math.round(Number(req.body[k]) * 60000); // minutes → ms
+    } else if (typeof SETTINGS[k] === "number") {
+      v = Number(req.body[k]);
+    } else if (typeof SETTINGS[k] === "string") {
+      v = req.body[k];
+    } else {
+      v = req.body[k];
+    }
+    SETTINGS[k] = v;
+  }
+  await saveSettings();
+
+  const action = req.body.action || "save";
+  if (action === "restart") {
+    res.send('<html><body style="background:#262729;color:white"><h2>Restarting now...</h2></body></html>');
+    setTimeout(() => {
+      console.log("Admin requested restart. Exiting process.");
+      process.exit(1);
+    }, 1000);
+    return;
+  }
+
+  res.redirect('/');
+});
+
+app.listen(PORT, () => console.log(`Settings web UI running at http://localhost:${PORT}`));
