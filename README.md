@@ -41,9 +41,8 @@ If you don't want to bother setting this up yourself and want it always availabl
 * Make sure Ollama has the model you want to use installed. Run `ollama run llama3.2` in the command prompt to install the default model.
 
 ### 4. Configure the Bot
-* Open `bot.js` in a text editor
-* Fill in all required settings in the settings block near the top of the document. This is the default settings when the bot is started, some settings can be changed with commands during runtime.
-* Adjust the DEFAULT_ADDITIONAL_PROMPT from line 46 to your liking.
+* Open `settings.json` in a text editor
+* Fill in all required settings. This is the default settings when the bot is started, some settings can be changed with commands or in the webUI during runtime.
 
 ### 5. Run the bot
 * Make sure your command prompt is navigated to the bots folder. `cd /path/to/TwitchAIchatbot`
