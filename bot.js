@@ -248,6 +248,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   // Command: !aiauto - Toggle auto-messages on or off
   if (message.toLowerCase() === '!aiauto' && (isBroadcaster || isModerator || isJuggleWithTim)) {
     SETTINGS.enableAutoMessages = !SETTINGS.enableAutoMessages; // Toggle the state
+    await saveSettings();
     const statusMessage = SETTINGS.enableAutoMessages ? 'Auto-messages are now enabled. 🟢' : 'Auto-messages are now disabled. 🔴';
     twitchClient.say(channel, statusMessage);
     messageHistory.push(`${SETTINGS.username}: ${statusMessage}`);
@@ -262,7 +263,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       messageHistory.push(`${SETTINGS.username}: Invalid input for !aitimer. ❌`);
     } else {
       SETTINGS.inactivityThreshold = minutes * 60 * 1000; // Convert minutes to milliseconds
-      twitchClient.say(channel, `Inactivity timer set to ${minutes} minutes. ⏲️`);
+      await saveSettings();
+      twitchClient.say(channel, `Auto message timer set to ${minutes} minutes. ⏲️`);
       messageHistory.push(`${SETTINGS.username}: Inactivity timer set to ${minutes} minutes. ⏲️`);
     }
     return;
@@ -275,6 +277,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       // Merge with core prompt
       SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${newSystemPrompt}`;
       addWaifuSystemPrompt();
+      //await saveSettings(); // This line would make !airesetprompt obsolete but would keep changes consistent between webUI and the command, not sure what to go with yet so leaving it commented out for now.
       twitchClient.say(channel, 'System prompt updated successfully! ✅');
       messageHistory.push(`${SETTINGS.username}: System prompt updated successfully! ✅`);
     } else {
@@ -320,6 +323,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       while (messageHistory.length > SETTINGS.maxHistoryLength) {
         messageHistory.shift();
       }
+      await saveSettings();
       twitchClient.say(channel, `Context history length set to ${newLength} messages 📜`);
       messageHistory.push(`${SETTINGS.username}: Context history length set to ${newLength} messages 📜`);
     }
@@ -863,14 +867,14 @@ const FIELD_LABELS = {
   password: "Twitch oauth password",
   channel: "Twitch channel",
   maxHistoryLength: "Context history length",
-  inactivityThreshold: "Auto message Timer",
+  inactivityThreshold: "Auto message timer",
   enableAutoMessages: "Auto messages",
   enableShoutoutCommand: "Shoutout command",
   enableHugCommand: "Hug command",
-  enableWaifuCommand: "Waifu Commands",
-  enableImageGeneration: "Image Generation",
+  enableWaifuCommand: "Waifu commands",
+  enableImageGeneration: "Image generation",
   enableQuotaNotification: "Notification for renewed image quota",
-  DEFAULT_ADDITIONAL_PROMPT: "System Prompt"
+  DEFAULT_ADDITIONAL_PROMPT: "System prompt"
 };
 
 // Simple Auth for /
