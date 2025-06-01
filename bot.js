@@ -498,39 +498,74 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 });
 
 
-// Event listener for subscriptions (including gifts)
+// Listener for new subscriptions
 twitchClient.on('subscription', async (channel, username, method, message, userstate) => {
   if (botPaused) return;
 
   // Parse subscription details
   const subMonths = parseInt(userstate['msg-param-cumulative-months']) || 1;
-  const isResub = method === 'resub';
-  const isGift = userstate['msg-param-recipient-user-name'] !== undefined;
-  const tier = userstate['msg-param-sub-plan'] === '3000' ? 3 : 
-              userstate['msg-param-sub-plan'] === '2000' ? 2 : 1;
-  
-  // Gift sub parameters
-  const recipient = isGift ? userstate['msg-param-recipient-display-name'] : null;
-  const giftMonths = isGift ? (userstate['msg-param-gift-months'] || subMonths) : null;
+  const tier = userstate['msg-param-sub-plan'] === '3000' ? 3 :
+               userstate['msg-param-sub-plan'] === '2000' ? 2 : 1;
 
-  // Build system prompt based on sub type
-  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to `;
-  let logMessage = '';
-  
-  if (isGift) {
-    eventPrompt += `a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). `;
-    eventPrompt += `Acknowledge both users in a fun way. Use celebratory emojis. Keep under 423 characters.`;
-    logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
-  } else if (isResub) {
-    eventPrompt += `a tier ${tier} resubscription from ${username} (${subMonths} months). `;
-    eventPrompt += `Thank them for continued support. Keep it fresh and excited.`;
-    logMessage = `RESUB: ${username} [${subMonths}mo] T${tier}`;
-  } else {
-    eventPrompt += `a new tier ${tier} subscription from ${username}. `;
-    eventPrompt += `Welcome them with enthusiastic, streamer-appropriate joy.`;
-    logMessage = `NEW SUB: ${username} T${tier}`;
-  }
+  // Build system prompt
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a new tier ${tier} subscription from ${username}. Welcome them with enthusiastic, streamer-appropriate joy.`;
+  let logMessage = `NEW SUB: ${username} T${tier}`;
 
+  // Handle the event
+  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage);
+});
+
+// Listener for resubscriptions
+twitchClient.on('resub', async (channel, username, months, message, userstate, methods) => {
+  if (botPaused) return;
+
+  // Parse resubscription details
+  const subMonths = parseInt(userstate['msg-param-cumulative-months']) || months;
+  const tier = userstate['msg-param-sub-plan'] === '3000' ? 3 :
+               userstate['msg-param-sub-plan'] === '2000' ? 2 : 1;
+
+  // Build system prompt
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a tier ${tier} resubscription from ${username} (${subMonths} months). Thank them for continued support. Keep it fresh and excited.`;
+  let logMessage = `RESUB: ${username} [${subMonths}mo] T${tier}`;
+
+  // Handle the event
+  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage);
+});
+
+// Listener for gifted subscriptions
+twitchClient.on('subgift', async (channel, username, streakMonths, recipient, methods, userstate) => {
+  if (botPaused) return;
+
+  // Parse gift subscription details
+  const tier = methods.plan === '3000' ? 3 :
+               methods.plan === '2000' ? 2 : 1;
+  const giftMonths = parseInt(userstate['msg-param-gift-months']) || 1;
+
+  // Build system prompt
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Acknowledge both users in a fun way. Use celebratory emojis. Keep under 423 characters.`;
+  let logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
+
+  // Handle the event
+  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient);
+});
+
+// Listener for Prime subscriptions
+twitchClient.on('primepaidupgrade', async (channel, username, methods, userstate) => {
+  if (botPaused) return;
+
+  // Prime subscriptions are considered tier 1
+  const tier = 1;
+
+  // Build system prompt
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a Prime subscription upgrade from ${username}. Welcome them with enthusiastic, streamer-appropriate joy.`;
+  let logMessage = `PRIME UPGRADE: ${username} T${tier}`;
+
+  // Handle the event
+  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage);
+});
+
+// Function to handle subscription events
+async function handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient = null) {
   try {
     // Get AI response
     let response = await getChatResponse(
@@ -544,31 +579,23 @@ twitchClient.on('subscription', async (channel, username, method, message, users
 
     // Fallback responses
     if (!response) {
-      response = isGift ? `${username} you LEGEND! Thanks for gifting ${recipient}! 🎁 Welcome ${recipient}!` :
-                 isResub ? `${subMonths}-month club! You're amazing ${username}!` :
+      response = recipient ? `${username} you LEGEND! Thanks for gifting ${recipient}! 🎁 Welcome ${recipient}!` :
                  `${username} Welcome to the family! Let's goooo! 🎉`;
     }
 
     // Format mention
-    let mention;
-    if (isGift) {
-      mention = `@${username} → @${userstate['msg-param-recipient-user-name']}`;
-    } else {
-      mention = `@${username}`;
-    }
+    let mention = recipient ? `@${username} → @${recipient}` : `@${username}`;
 
     twitchClient.say(channel, `${mention} ${response}`);
-    
+
   } catch (error) {
     console.error('Subscription Error:', error);
     // Send safe fallback even if AI fails
-    const errorResponse = isGift ? `WOW! Massive thanks to ${username} for gifting ${recipient}! 🎁✨` : 
+    const errorResponse = recipient ? `WOW! Massive thanks to ${username} for gifting ${recipient}! 🎁✨` :
                          `Big welcome to ${username}! 🥳`;
     twitchClient.say(channel, errorResponse);
   }
-});
-
-
+}
 
 
 // Event listener for bits (cheers)
