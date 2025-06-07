@@ -532,19 +532,38 @@ twitchClient.on('resub', async (channel, username, months, message, userstate, m
   await handleSubscriptionEvent(channel, username, eventPrompt, logMessage);
 });
 
-// Listener for gifted subscriptions
+// Listener for sub gift batches (mystery gifts)
+twitchClient.on('submysterygift', async (channel, username, numbOfSubs, methods, userstate) => {
+  if (botPaused) return;
+
+  // Parse mystery gift subscription details
+  const tier = methods.plan === '3000' ? 3 :
+               methods.plan === '2000' ? 2 : 1;
+  // Build system prompt
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a gift of ${numbOfSubs} tier ${tier} subscriptions from ${username}. Use a celebratory tone and keep it under 423 characters.`;
+  let logMessage = `MYSTERY GIFT: ${username} gifted ${numbOfSubs} subs at T${tier}`;
+
+  // Handle the event
+  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage);
+});
+
+// Adjusted handler to handle individual gifts within a mystery gift batch or standalone gifts
 twitchClient.on('subgift', async (channel, username, streakMonths, recipient, methods, userstate) => {
   if (botPaused) return;
 
-  // Parse gift subscription details
+  // Check if the individual gift is part of a mystery gift batch
+  if (methods && methods.wasAnonymous) {
+    console.log(`Part of anonymous mystery gift - skipping individual acknowledgment.`);
+    return;
+  }
+
+  // Handle individual gift subscriptions
   const tier = methods.plan === '3000' ? 3 :
                methods.plan === '2000' ? 2 : 1;
   const giftMonths = parseInt(userstate['msg-param-gift-months']) || 1;
 
-  // Build system prompt
-  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Acknowledge both users in a fun way. Use celebratory emojis. Keep under 423 characters.`;
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Use celebratory emojis. Keep under 423 characters.`;
   let logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
-
   // Handle the event
   await handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient);
 });
