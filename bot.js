@@ -95,7 +95,7 @@ async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
   }
 }
 
-let waifus = [];
+let waifus = SETTINGS.waifus || [];
 
 function addWaifuSystemPrompt() {
   let waifuPrompt = '';
@@ -253,6 +253,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     const username = tags.username;
     if (!waifus.includes(username)) {
       waifus.push(username);
+      SETTINGS.waifus = waifus;
+      await saveSettings();
       twitchClient.say(channel, `@${username} I love you! 💖 UwU`);
     } else {
       twitchClient.say(channel, `@${username}, you're already on my waifu list my love! 💖 UwU`);
@@ -266,6 +268,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     const username = tags.username;
     if (waifus.includes(username)) {
       waifus = waifus.filter(u => u !== username);
+      SETTINGS.waifus = waifus;
+      await saveSettings();
       twitchClient.say(channel, `@${username} broke up with me 💔`);
       addWaifuSystemPrompt();
     } else {
