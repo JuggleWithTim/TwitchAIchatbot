@@ -1066,12 +1066,15 @@ const CHECKBOX_FIELDS = [
 
 // Render input fields (checkboxes for certain keys)
 function renderInputField(key, value) {
+  if (key === "password") {
+    // Use type="password" but keep styling same as text inputs
+    return `<input type="password" id="${key}" name="${key}" value="${value === undefined ? '' : value}" 
+      style="width: 92%; padding: 7px; border-radius: 5px; border: 1px solid #8070c7; font-size: 1em; background: #202025; color: #fafaff;" />`;
+  }
   if (CHECKBOX_FIELDS.includes(key)) {
-    // Checkbox: checked if value == 1 (not just truthy, but exactly 1)
     return `<input type="checkbox" id="${key}" name="${key}" value="1" ${value == 1 ? "checked" : ""}>`;
   }
   if (key === "inactivityThreshold") {
-    // Show value in minutes, but internally store in ms
     let minutes = Math.max(1, Math.round(Number(value) / 60000));
     return `<input type="number" id="${key}" name="${key}" value="${minutes}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">minutes</span>`;
   }
