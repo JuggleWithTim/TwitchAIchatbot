@@ -999,6 +999,9 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableWaifuCommand",
   "enableImageGeneration",
   "enableQuotaNotification",
+  "enableBitsAlerts",
+  "enableSubsAlerts",
+  "enableRaidsAlerts",
   "DEFAULT_ADDITIONAL_PROMPT"
 ];
 
@@ -1014,6 +1017,9 @@ const FIELD_LABELS = {
   enableWaifuCommand: "Waifu commands",
   enableImageGeneration: "Image generation",
   enableQuotaNotification: "Notification for renewed image quota",
+  enableBitsAlerts: "Bits alerts",
+  enableSubsAlerts: "Subscriptions alerts",
+  enableRaidsAlerts: "Raids alerts",
   DEFAULT_ADDITIONAL_PROMPT: "System prompt"
 };
 
@@ -1052,7 +1058,10 @@ const CHECKBOX_FIELDS = [
   "enableHugCommand",
   "enableWaifuCommand",
   "enableImageGeneration",
-  "enableQuotaNotification"
+  "enableQuotaNotification",
+  "enableBitsAlerts",
+  "enableSubsAlerts",
+  "enableRaidsAlerts"
 ];
 
 // Render input fields (checkboxes for certain keys)
@@ -1135,7 +1144,7 @@ app.post('/', async (req, res) => {
       // Checkbox field: present means checked, missing means unchecked
       v = req.body[k] === "1" ? 1 : 0;
     } else if (k === "inactivityThreshold") {
-    v = Math.round(Number(req.body[k]) * 60000); // minutes → ms
+      v = Math.round(Number(req.body[k]) * 60000); // minutes → ms
     } else if (typeof SETTINGS[k] === "number") {
       v = Number(req.body[k]);
     } else if (typeof SETTINGS[k] === "string") {
