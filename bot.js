@@ -147,6 +147,45 @@ async function sendAutoMessage(channel) {
   lastBotMentionTime = Date.now();
 }
 
+
+// Test commands
+/*twitchClient.on('message', async (channel, tags, message, self) => {
+  if (self) return; // Ignore messages from the bot itself
+
+    switch (message.toLowerCase()) {
+      case '!testsubscription':
+        twitchClient.emit('subscription', channel, 'test_subscriber', {}, '', tags);
+        break;
+      case '!testresub':
+        twitchClient.emit('resub', channel, 'test_resubscriber', 3, '', tags, {});
+        break;
+      case '!testsubmysterygift':
+        twitchClient.emit('submysterygift', channel, 'test_gifter', 5, {}, tags);
+        break;
+      case '!testsubgift':
+        twitchClient.emit('subgift', channel, 'test_gifter', 1, 'test_recipient', {}, tags);
+        break;
+      case '!testmultisubgift':
+        const recipients = ['alice', 'bob', 'carol', 'lenny'];
+        recipients.forEach(recipient => {
+          twitchClient.emit('subgift', channel, 'test_gifter', 1, recipient, { plan: '1000' }, tags);
+        });
+        break;
+      case '!testprimeupgrade':
+        twitchClient.emit('primepaidupgrade', channel, 'test_user', {}, tags);
+        break;
+      case '!testcheer':
+        twitchClient.emit('cheer', channel, { username: 'test_cheerer', bits: '100' }, message);
+        break;
+      case '!testraided':
+        twitchClient.emit('raided', channel, 'test_raider', 50);
+        break;
+      // Add more test cases here if needed
+      default:
+        break;
+    }
+});*/
+
 // Event listener for Twitch chat messages
 twitchClient.on('message', async (channel, tags, message, self) => {
   // Ignore messages from the bot itself
@@ -547,25 +586,80 @@ twitchClient.on('submysterygift', async (channel, username, numbOfSubs, methods,
   await handleSubscriptionEvent(channel, username, eventPrompt, logMessage);
 });
 
-// Adjusted handler to handle individual gifts within a mystery gift batch or standalone gifts
-twitchClient.on('subgift', async (channel, username, streakMonths, recipient, methods, userstate) => {
+// Buffer to store subgift events
+let subgiftBuffer = [];
+
+// Function to process buffered subgift events
+function processSubgiftBuffer() {
+  if (subgiftBuffer.length > 0) {
+    if (subgiftBuffer.length < 3) {
+      // Acknowledge individually
+      subgiftBuffer.forEach(({ channel, username, streakMonths, recipient, methods, userstate }) => {
+        handleIndividualSubgift(channel, username, streakMonths, recipient, methods, userstate);
+      });
+    } else {
+      // Send general grouped response
+      handleGroupedSubgift(subgiftBuffer);
+    }
+    // Clear buffer
+    subgiftBuffer = [];
+  }
+}
+
+// Periodically check and process the buffer every second
+setInterval(processSubgiftBuffer, 1000);
+
+// New functions to handle individual and grouped subgift responses
+async function handleIndividualSubgift(channel, username, streakMonths, recipient, methods, userstate) {
+  if (botPaused) return;
+  const tier = methods.plan === '3000' ? 3 : methods.plan === '2000' ? 2 : 1;
+  const giftMonths = parseInt(userstate['msg-param-gift-months']) || 1;
+
+  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Use celebratory emojis. Keep under 423 characters.`;
+  let logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
+
+  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient);
+}
+
+async function handleGroupedSubgift(events) {
+  if (botPaused) return;
+  const channel = events[0].channel;
+  const usernames = [...new Set(events.map(event => event.username))];
+  const totalGifts = events.length;
+
+  const groupedEventPrompt = `${SYSTEM_PROMPT}\nAcknowledge a group of ${totalGifts} gifted subscriptions from these users: ${usernames.join(', ')}. Use a celebratory and grateful tone. Keep the message concise and under 423 characters.`;
+
+  try {
+    let response = await getChatResponse(
+      `Grouped subgift event: ${totalGifts} gifts from ${usernames.length} users`,
+      messageHistory.join('\n'),
+      groupedEventPrompt
+    );
+
+    response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+
+    if (!response) {
+      response = `A big shoutout to our amazing gifters: ${usernames.join(', ')} for gifting a total of ${totalGifts} subscriptions! 🎁✨`;
+    }
+
+    twitchClient.say(channel, response);
+
+  } catch (error) {
+    console.error('Grouped subgift response error:', error);
+    twitchClient.say(channel, `Thanks to our generous gifters: ${usernames.join(', ')} for gifting ${totalGifts} subs! 🎁✨`);
+  }
+}
+
+// Modify the listener to add events to buffer
+twitchClient.on('subgift', (channel, username, streakMonths, recipient, methods, userstate) => {
   if (botPaused) return;
 
-  // Check if the individual gift is part of a mystery gift batch
   if (methods && methods.wasAnonymous) {
     console.log(`Part of anonymous mystery gift - skipping individual acknowledgment.`);
     return;
   }
 
-  // Handle individual gift subscriptions
-  const tier = methods.plan === '3000' ? 3 :
-               methods.plan === '2000' ? 2 : 1;
-  const giftMonths = parseInt(userstate['msg-param-gift-months']) || 1;
-
-  let eventPrompt = `${SYSTEM_PROMPT}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Use celebratory emojis. Keep under 423 characters.`;
-  let logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
-  // Handle the event
-  await handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient);
+  subgiftBuffer.push({ channel, username, streakMonths, recipient, methods, userstate });
 });
 
 // Listener for Prime subscriptions
@@ -624,8 +718,8 @@ twitchClient.on('cheer', async (channel, userstate, message) => {
   const username = userstate.username;
   const bits = userstate.bits;
 
-  const eventPrompt = `${SYSTEM_PROMPT}\nRespond to a cheer of ${bits} bits 
-    from ${username}. Incorporate the bit amount naturally. Casual stream-appropriate 
+  const eventPrompt = `${SYSTEM_PROMPT}\nRespond to a cheer of ${bits} bits
+    from ${username}. Incorporate the bit amount naturally. Casual stream-appropriate
     excitement. Keep under 423 characters.`;
 
   try {
@@ -648,8 +742,8 @@ twitchClient.on('cheer', async (channel, userstate, message) => {
 twitchClient.on('raided', async (channel, username, viewers) => {
   if (botPaused) return;
 
-  const eventPrompt = `${SYSTEM_PROMPT}\nRespond to a raid from ${username} 
-    with ${viewers} viewers. Create an energetic welcome message. Include the raider 
+  const eventPrompt = `${SYSTEM_PROMPT}\nRespond to a raid from ${username}
+    with ${viewers} viewers. Create an energetic welcome message. Include the raider
     name and viewer count naturally. Keep under 423 characters.`;
 
   try {
