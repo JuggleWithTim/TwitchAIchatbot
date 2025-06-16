@@ -5,16 +5,12 @@ const { OpenAI } = require('openai'); // OpenAI Node.js module
 const fs = require('fs').promises;
 const path = require('path');
 
+const discordBot = require('./discordbot.js');
+
 // === USER SETTINGS === //
 //const fs = require('fs').promises;
 
 let SETTINGS = require('./settings.json');
-
-async function saveSettings() {
-  await fs.writeFile('./settings.json', JSON.stringify(SETTINGS, null, 2));
-  SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${SETTINGS.DEFAULT_ADDITIONAL_PROMPT}`;
-  addWaifuSystemPrompt();
-}
 
 // To reload:
 // SETTINGS = require('./settings.json');
@@ -978,6 +974,13 @@ twitchClient.connect().then(() => {
   console.error('Failed to connect to Twitch chat:', err);
 });
 
+if (SETTINGS.enableDiscordBot && SETTINGS.discordBotToken) {
+  discordBot.initializeDiscord(SETTINGS, openai);
+  discordClientToken = SETTINGS.discordBotToken;
+  discordBot.loginDiscord(discordClientToken);
+} else {
+  console.log('Discord bot is disabled or token missing in settings.');
+}
 
 // Web interface
 // Required Packages
@@ -1006,7 +1009,11 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableBitsAlerts",
   "enableSubsAlerts",
   "enableRaidsAlerts",
-  "DEFAULT_ADDITIONAL_PROMPT"
+  "DEFAULT_ADDITIONAL_PROMPT",
+  "enableDiscordBot",
+  "discordBotToken",
+  "discordChannels",
+  "discordSystemPrompt"
 ];
 
 const FIELD_LABELS = {
@@ -1024,7 +1031,11 @@ const FIELD_LABELS = {
   enableBitsAlerts: "Bits alerts",
   enableSubsAlerts: "Subscriptions alerts",
   enableRaidsAlerts: "Raids alerts",
-  DEFAULT_ADDITIONAL_PROMPT: "System prompt"
+  DEFAULT_ADDITIONAL_PROMPT: "System prompt",
+  enableDiscordBot: "Enable Discord Bot",
+  discordBotToken: "Discord Bot Token",
+  discordChannels: "Discord Channel IDs or Names (comma separated)",
+  discordSystemPrompt: "Discord Bot System Prompt"
 };
 
 // Simple Auth for /
@@ -1051,8 +1062,24 @@ async function loadSettings() {
     SETTINGS = {};
   }
 }
+//async function saveSettings() {
+//  await fs.writeFile(SETTINGS_FILE, JSON.stringify(SETTINGS, null, 2), 'utf-8');
+//}
+
 async function saveSettings() {
   await fs.writeFile(SETTINGS_FILE, JSON.stringify(SETTINGS, null, 2), 'utf-8');
+  SYSTEM_PROMPT = `${CORE_SYSTEM_PROMPT}\nAdditional Instructions:\n${SETTINGS.DEFAULT_ADDITIONAL_PROMPT}`;
+  addWaifuSystemPrompt();
+
+  if (SETTINGS.enableDiscordBot) {
+    discordBot.initializeDiscord(SETTINGS, openai);
+    if (discordClientToken !== SETTINGS.discordBotToken) {
+      discordClientToken = SETTINGS.discordBotToken;
+      discordBot.loginDiscord(discordClientToken);
+    }
+  } else {
+    discordBot.disconnectDiscord();
+  }
 }
 
 // For fields that should be checkboxes (1/0 only)
@@ -1065,7 +1092,8 @@ const CHECKBOX_FIELDS = [
   "enableQuotaNotification",
   "enableBitsAlerts",
   "enableSubsAlerts",
-  "enableRaidsAlerts"
+  "enableRaidsAlerts",
+  "enableDiscordBot"
 ];
 
 // Render input fields (checkboxes for certain keys)
@@ -1084,6 +1112,34 @@ function renderInputField(key, value) {
   }
   if (key === "DEFAULT_ADDITIONAL_PROMPT") {
     return `<textarea id="${key}" name="${key}" rows="10" cols="60">${value}</textarea>`;
+  }
+  if (key === "maxHistoryLength") {
+    return `<input type="number" id="${key}" name="${key}" value="${value}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">messages</span>`;
+  }
+  if (typeof value === "number") {
+    return `<input type="number" id="${key}" name="${key}" value="${value}" />`;
+  }
+  if (typeof value === "string" && value.length > 80) {
+    return `<textarea id="${key}" name="${key}" rows="6" cols="60">${value}</textarea>`;
+  }
+  if (key === "password" || key === "discordBotToken") {
+    return `<input type="password" id="${key}" name="${key}" value="${value === undefined ? '' : value}" 
+      style="width: 92%; padding: 7px; border-radius: 5px; border: 1px solid #8070c7; font-size: 1em; background: #202025; color: #fafaff;" />`;
+  }
+  if (CHECKBOX_FIELDS.includes(key)) {
+    return `<input type="checkbox" id="${key}" name="${key}" value="1" ${value == 1 ? "checked" : ""}>`;
+  }
+  if (key === "inactivityThreshold") {
+    let minutes = Math.max(1, Math.round(Number(value) / 60000));
+    return `<input type="number" id="${key}" name="${key}" value="${minutes}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">minutes</span>`;
+  }
+  if (key === "DEFAULT_ADDITIONAL_PROMPT" || key === "discordSystemPrompt") {
+    return `<textarea id="${key}" name="${key}" rows="10" cols="60">${value || ''}</textarea>`;
+  }
+  if (key === "discordChannels") {
+    // Render array as comma separated string in text input
+    const displayVal = Array.isArray(value) ? value.join(', ') : (value || '');
+    return `<input type="text" id="${key}" name="${key}" value="${displayVal}" style="width: 92%;" />`;
   }
   if (key === "maxHistoryLength") {
     return `<input type="number" id="${key}" name="${key}" value="${value}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">messages</span>`;
@@ -1145,22 +1201,24 @@ app.post('/', async (req, res) => {
   await loadSettings();
 
   // For all editable fields, update SETTINGS accordingly
-  for (const k of SETTINGS_EDITABLE_FIELDS) {
-    let v;
-    if (CHECKBOX_FIELDS.includes(k)) {
-      // Checkbox field: present means checked, missing means unchecked
-      v = req.body[k] === "1" ? 1 : 0;
-    } else if (k === "inactivityThreshold") {
-      v = Math.round(Number(req.body[k]) * 60000); // minutes → ms
-    } else if (typeof SETTINGS[k] === "number") {
-      v = Number(req.body[k]);
-    } else if (typeof SETTINGS[k] === "string") {
-      v = req.body[k];
-    } else {
-      v = req.body[k];
-    }
-    SETTINGS[k] = v;
+for (const k of SETTINGS_EDITABLE_FIELDS) {
+  let v;
+  if (CHECKBOX_FIELDS.includes(k)) {
+    v = req.body[k] === "1" ? 1 : 0;
+  } else if (k === "discordChannels") {
+    const raw = req.body[k] || '';
+    v = raw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  } else if (k === "inactivityThreshold") {
+    v = Math.round(Number(req.body[k]) * 60000);
+  } else if (typeof SETTINGS[k] === "number") {
+    v = Number(req.body[k]);
+  } else if (typeof SETTINGS[k] === "string") {
+    v = req.body[k];
+  } else {
+    v = req.body[k];
   }
+  SETTINGS[k] = v;
+}
   await saveSettings();
 
   const action = req.body.action || "save";
