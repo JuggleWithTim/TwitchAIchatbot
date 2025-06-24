@@ -6,6 +6,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const discordBot = require('./discordbot.js');
+const validateSiteswap = require('./siteswapValidator.js');
 
 // === USER SETTINGS === //
 //const fs = require('fs').promises;
@@ -186,6 +187,34 @@ async function sendAutoMessage(channel) {
 twitchClient.on('message', async (channel, tags, message, self) => {
   // Ignore messages from the bot itself
   if (self) return;
+
+  // Removes everything that is not a digit from the message
+  const siteswapCandidate = message.replace(/\D/g, '');
+
+  // Validates the numeric string as a siteswap candidate and responds if valid
+  if (siteswapCandidate.length > 0 && validateSiteswap(siteswapCandidate)) {
+    // Compose prompt for AI response praising the valid siteswap
+    const excitementPrompt = `The user @${tags.username} has sent a message containing numbers that form a valid siteswap pattern: ${siteswapCandidate}. Respond with excitement and enthusiasm.`;
+
+    // Use current message history as context
+    const context = messageHistory.join('\n');
+
+    // Generate AI response
+    let aiResponse = await getChatResponse(excitementPrompt, context, SYSTEM_PROMPT);
+    
+    aiResponse = aiResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+
+    if (!aiResponse) {
+      aiResponse = `@${tags.username}, Wow! I see a valid siteswap in your message! That's awesome! 🎉`;
+    } else if (!aiResponse.toLowerCase().startsWith(`@${tags.username.toLowerCase()}`)) {
+      // Make sure to mention user if AI forgot
+      aiResponse = `@${tags.username}, ${aiResponse}`;
+    }
+
+    twitchClient.say(channel, aiResponse);
+    messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
+    return; // Stop further handling for this message
+  }
 
   // Add the message to the history
   messageHistory.push(`${tags.username}: ${message}`);
