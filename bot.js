@@ -188,6 +188,19 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   // Ignore messages from the bot itself
   if (self) return;
 
+  // Add the message to the history
+  messageHistory.push(`${tags.username}: ${message}`);
+
+  // Keep the history within the specified limit
+  if (messageHistory.length > SETTINGS.maxHistoryLength) {
+    messageHistory.shift(); // Remove the oldest message
+  }
+
+  // Check if the sender is a broadcaster, moderator, or JuggleWithTim
+  const isBroadcaster = tags.badges?.broadcaster === '1';
+  const isModerator = tags.badges?.moderator === '1';
+  const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
+
   // Removes everything that is not a digit from the message
   const siteswapCandidate = message.replace(/\D/g, '');
 
@@ -215,19 +228,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
     return; // Stop further handling for this message
   }
-
-  // Add the message to the history
-  messageHistory.push(`${tags.username}: ${message}`);
-
-  // Keep the history within the specified limit
-  if (messageHistory.length > SETTINGS.maxHistoryLength) {
-    messageHistory.shift(); // Remove the oldest message
-  }
-
-  // Check if the sender is a broadcaster, moderator, or JuggleWithTim
-  const isBroadcaster = tags.badges?.broadcaster === '1';
-  const isModerator = tags.badges?.moderator === '1';
-  const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
 
   // === COMMAND HANDLING === //
 
