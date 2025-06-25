@@ -202,31 +202,34 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
 
   if (SETTINGS.enableSiteswapAwareness) {
-    // Removes everything that is not a digit from the message
-    const siteswapCandidate = message.replace(/\D/g, '');
+    // Only proceed if message is not from the bot itself
+    if (tags.username.toLowerCase() !== SETTINGS.username.toLowerCase()) {
+      // Removes everything that is not a digit from the message
+      const siteswapCandidate = message.replace(/\D/g, '');
 
-    // Validates the numeric string as a siteswap candidate and responds if valid
-    if (siteswapCandidate.length > 0 && validateSiteswap(siteswapCandidate)) {
-      // Compose prompt for AI response praising the valid siteswap
-      const excitementPrompt = `The user @${tags.username} has sent a message containing numbers that form a valid siteswap pattern: ${siteswapCandidate}. Respond with excitement and enthusiasm.`;
+      // Validates the numeric string as a siteswap candidate and responds if valid
+      if (siteswapCandidate.length > 0 && validateSiteswap(siteswapCandidate)) {
+        // Compose prompt for AI response praising the valid siteswap
+        const excitementPrompt = `The user @${tags.username} has sent a message containing numbers that form a valid siteswap pattern: ${siteswapCandidate}. Respond with excitement and enthusiasm.`;
 
-      // Use current message history as context
-      const context = messageHistory.join('\n');
+        // Use current message history as context
+        const context = messageHistory.join('\n');
 
-      // Generate AI response
-      let aiResponse = await getChatResponse(excitementPrompt, context, SYSTEM_PROMPT);
+        // Generate AI response
+        let aiResponse = await getChatResponse(excitementPrompt, context, SYSTEM_PROMPT);
 
-      aiResponse = aiResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+        aiResponse = aiResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
 
-      if (!aiResponse) {
-        aiResponse = `@${tags.username}, Wow! I see a valid siteswap in your message! That's awesome! 🎉`;
-      } else if (!aiResponse.toLowerCase().startsWith(`@${tags.username.toLowerCase()}`)) {
-        // Make sure to mention user if AI forgot
-        aiResponse = `@${tags.username}, ${aiResponse}`;
+        if (!aiResponse) {
+          aiResponse = `@${tags.username}, Wow! I see a valid siteswap in your message! That's awesome! 🎉`;
+        } else if (!aiResponse.toLowerCase().startsWith(`@${tags.username.toLowerCase()}`)) {
+          // Make sure to mention user if AI forgot
+          aiResponse = `@${tags.username}, ${aiResponse}`;
+        }
+
+        twitchClient.say(channel, aiResponse);
+        messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
       }
-
-      twitchClient.say(channel, aiResponse);
-      messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
     }
   }
 
