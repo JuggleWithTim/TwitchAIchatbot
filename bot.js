@@ -201,31 +201,33 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   const isModerator = tags.badges?.moderator === '1';
   const isJuggleWithTim = tags.username.toLowerCase() === 'jugglewithtim'; // Check if the sender is JuggleWithTim
 
-  // Removes everything that is not a digit from the message
-  const siteswapCandidate = message.replace(/\D/g, '');
+  if (SETTINGS.enableSiteswapAwareness) {
+    // Removes everything that is not a digit from the message
+    const siteswapCandidate = message.replace(/\D/g, '');
 
-  // Validates the numeric string as a siteswap candidate and responds if valid
-  if (siteswapCandidate.length > 0 && validateSiteswap(siteswapCandidate)) {
-    // Compose prompt for AI response praising the valid siteswap
-    const excitementPrompt = `The user @${tags.username} has sent a message containing numbers that form a valid siteswap pattern: ${siteswapCandidate}. Respond with excitement and enthusiasm.`;
+    // Validates the numeric string as a siteswap candidate and responds if valid
+    if (siteswapCandidate.length > 0 && validateSiteswap(siteswapCandidate)) {
+      // Compose prompt for AI response praising the valid siteswap
+      const excitementPrompt = `The user @${tags.username} has sent a message containing numbers that form a valid siteswap pattern: ${siteswapCandidate}. Respond with excitement and enthusiasm.`;
 
-    // Use current message history as context
-    const context = messageHistory.join('\n');
+      // Use current message history as context
+      const context = messageHistory.join('\n');
 
-    // Generate AI response
-    let aiResponse = await getChatResponse(excitementPrompt, context, SYSTEM_PROMPT);
-    
-    aiResponse = aiResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+      // Generate AI response
+      let aiResponse = await getChatResponse(excitementPrompt, context, SYSTEM_PROMPT);
 
-    if (!aiResponse) {
-      aiResponse = `@${tags.username}, Wow! I see a valid siteswap in your message! That's awesome! 🎉`;
-    } else if (!aiResponse.toLowerCase().startsWith(`@${tags.username.toLowerCase()}`)) {
-      // Make sure to mention user if AI forgot
-      aiResponse = `@${tags.username}, ${aiResponse}`;
+      aiResponse = aiResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+
+      if (!aiResponse) {
+        aiResponse = `@${tags.username}, Wow! I see a valid siteswap in your message! That's awesome! 🎉`;
+      } else if (!aiResponse.toLowerCase().startsWith(`@${tags.username.toLowerCase()}`)) {
+        // Make sure to mention user if AI forgot
+        aiResponse = `@${tags.username}, ${aiResponse}`;
+      }
+
+      twitchClient.say(channel, aiResponse);
+      messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
     }
-
-    twitchClient.say(channel, aiResponse);
-    messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
   }
 
   // === COMMAND HANDLING === //
@@ -1033,6 +1035,7 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableHugCommand",
   "enableWaifuCommand",
   "enableImageGeneration",
+  "enableSiteswapAwareness",
   "enableQuotaNotification",
   "enableBitsAlerts",
   "enableSubsAlerts",
@@ -1056,6 +1059,7 @@ const FIELD_LABELS = {
   enableWaifuCommand: "Waifu commands",
   enableImageGeneration: "Image generation",
   enableQuotaNotification: "Notification for renewed image quota",
+  enableSiteswapAwareness: "Siteswap Awareness",
   enableBitsAlerts: "Bits alerts",
   enableSubsAlerts: "Subscriptions alerts",
   enableRaidsAlerts: "Raids alerts",
@@ -1121,7 +1125,8 @@ const CHECKBOX_FIELDS = [
   "enableBitsAlerts",
   "enableSubsAlerts",
   "enableRaidsAlerts",
-  "enableDiscordBot"
+  "enableDiscordBot",
+  "enableSiteswapAwareness"
 ];
 
 // Render input fields (checkboxes for certain keys)
