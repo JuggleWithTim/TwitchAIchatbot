@@ -226,7 +226,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
     twitchClient.say(channel, aiResponse);
     messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
-    return; // Stop further handling for this message
   }
 
   // === COMMAND HANDLING === //
