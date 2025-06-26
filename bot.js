@@ -228,6 +228,9 @@ twitchClient.on('message', async (channel, tags, message, self) => {
         }
 
         twitchClient.say(channel, aiResponse);
+        if (SETTINGS.sendSiteswapCommand) {
+          twitchClient.say(channel, `!ss ${siteswapCandidate}`);
+        }
         messageHistory.push(`${SETTINGS.username}: ${aiResponse}`);
       }
     }
@@ -1040,6 +1043,7 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableImageGeneration",
   "enableQuotaNotification",
   "enableSiteswapAwareness",
+  "sendSiteswapCommand",
   "enableBitsAlerts",
   "enableSubsAlerts",
   "enableRaidsAlerts",
@@ -1063,6 +1067,7 @@ const FIELD_LABELS = {
   enableImageGeneration: "Image generation",
   enableQuotaNotification: "Notification for renewed image quota",
   enableSiteswapAwareness: "Siteswap Awareness",
+  sendSiteswapCommand: "Send command to <a href='https://github.com/JuggleWithTim/siteswap-js-twitch' target='_blank' style='color: inherit; text-decoration: underline;'>siteswap-js-twitch</a> (!ss &lt;siteswap&gt;)",
   enableBitsAlerts: "Bits alerts",
   enableSubsAlerts: "Subscriptions alerts",
   enableRaidsAlerts: "Raids alerts",
@@ -1129,7 +1134,8 @@ const CHECKBOX_FIELDS = [
   "enableSubsAlerts",
   "enableRaidsAlerts",
   "enableDiscordBot",
-  "enableSiteswapAwareness"
+  "enableSiteswapAwareness",
+  "sendSiteswapCommand",
 ];
 
 // Render input fields (checkboxes for certain keys)
