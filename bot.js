@@ -204,11 +204,18 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   if (SETTINGS.enableSiteswapAwareness) {
     // Only proceed if message is not from the bot itself
     if (tags.username.toLowerCase() !== SETTINGS.username.toLowerCase()) {
-      // Removes everything that is not a digit from the message
-      const siteswapCandidate = message.replace(/\D/g, '');
+      // Extract siteswap-like candidates (must contain a digit)
+      const matches = message.match(/\b[0-9a-z\[\]\(\)\,\*x]+\b/gi) || [];
+      let siteswapCandidate = null;
+      for (const m of matches) {
+        if (/\d/.test(m) && validateSiteswap(m)) {
+          siteswapCandidate = m;
+          break;
+        }
+      }
 
-      // Validates the numeric string as a siteswap candidate and responds if valid
-      if (siteswapCandidate.length > 0 && validateSiteswap(siteswapCandidate)) {
+      // Validates the first siteswap candidate and responds if valid
+      if (siteswapCandidate) {
         // Compose prompt for AI response praising the valid siteswap
         const excitementPrompt = `The user @${tags.username} has sent a message containing numbers that form a valid siteswap pattern: ${siteswapCandidate}. Respond with excitement and enthusiasm.`;
 
