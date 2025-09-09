@@ -35,5 +35,7 @@
   "enableDiscordBot": 0,
   "discordBotToken": "000",
   "discordChannels": [],
-  "discordSystemPrompt": ""
+  "discordSystemPrompt": "",
+  "temperature": 1.0
 }
+

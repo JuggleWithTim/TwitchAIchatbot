@@ -69,6 +69,7 @@ async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
           { role: 'user', content: `Context:\n${context}\n\nUser: ${userMessage}\nBot:` },
         ],
         max_tokens: 150, // Limit the response length
+        temperature: SETTINGS.temperature,
       });
       return response.choices[0].message.content.trim();
     } catch (error) {
@@ -83,6 +84,7 @@ async function getChatResponse(userMessage, context, prompt = SYSTEM_PROMPT) {
         prompt: `Context:\n${context}\n\nUser: ${userMessage}\nBot:`,
         system: prompt,
         stream: false,
+        temperature: SETTINGS.temperature,
       });
       return response.data.response.trim();
     } catch (error) {
@@ -1055,6 +1057,7 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableSubsAlerts",
   "enableRaidsAlerts",
   "DEFAULT_ADDITIONAL_PROMPT",
+  "temperature",
   "enableDiscordBot",
   "discordBotToken",
   "discordChannels",
@@ -1079,6 +1082,7 @@ const FIELD_LABELS = {
   enableSubsAlerts: "Subscriptions alerts",
   enableRaidsAlerts: "Raids alerts",
   DEFAULT_ADDITIONAL_PROMPT: "System prompt",
+  temperature: "Temperature (Control randomness: 0.0 is very focused and deterministic, 2.0 is very creative and random)",
   enableDiscordBot: "Enable Discord Bot",
   discordBotToken: "Discord Bot Token",
   discordChannels: "Discord Channel IDs or Names (comma separated)",
@@ -1161,6 +1165,10 @@ function renderInputField(key, value) {
   }
   if (key === "DEFAULT_ADDITIONAL_PROMPT") {
     return `<textarea id="${key}" name="${key}" rows="10" cols="60">${value}</textarea>`;
+  }
+  if (key === "temperature") {
+    // For decimals between 0.1 and 1.0
+    return `<input type="number" id="${key}" name="${key}" min="0.0" max="2.0" step="0.1" value="${value}" style="width:90px;" /> <span style="font-size:0.97em;color:#ccc;">(0.0 - 2.0)</span>`;
   }
   if (key === "maxHistoryLength") {
     return `<input type="number" id="${key}" name="${key}" value="${value}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">messages</span>`;
