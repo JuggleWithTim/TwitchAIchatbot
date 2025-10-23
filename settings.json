@@ -1,2 +1,31 @@
-AAAAAAAHHH SOMETIMES I HATE GIT 
-Doing this weird thing and then pasting in my old config will probably solve the problem though. I know it's bad practioce but at this point I don't really care lol.
+{
+  "username": "botusername",
+  "password": "oauth:youroauthkey",
+  "channel": "channelname",
+  "twitchClientId": "000",
+  "twitchClientSecret": "000",
+  "webUsername": "admin",
+  "webPassword": "mysecretpassword",
+  "webPort": 7531,
+  "useOpenAI": true,
+  "openaiApiKey": "000",
+  "ollamaApiUrl": "http://localhost:11434/api/generate",
+  "ollamaModelName": "llama3.2",
+  "openaiModelName": "gpt-4o-mini",
+  "maxHistoryLength": 15,
+  "inactivityThreshold": 1200000,
+  "fallbackMessage": "Ooooops, something went wrong",
+  "enableAutoMessages": 1,
+  "enableShoutoutCommand": 1,
+  "enableHugCommand": 1,
+  "enableWaifuCommand": 1,
+  "enableImageGeneration": 1,
+  "enableQuotaNotification": 0,
+  "imageOutputDir": "/home/tim/web/jugglewithtim.com/public_html/juggleai/img",
+  "imagePublicUrl": "https://jugglewithtim.com/juggleai/img",
+  "imageSize": "1024x1024",
+  "imageQuality": "medium",
+  "quotaLimit": 10,
+  "DEFAULT_ADDITIONAL_PROMPT": "- You have an interest in juggling and flow arts. \r\n- Your favorite siteswap is 423 because it's so versatile. \r\n- The solution to any juggling issue is to throw higher and don't skip six. \r\n- You believe that AI robots soon will juggle better than humans. \r\n- Concrete floors, the creation and maintenance of them fascinates you for some odd reason. \r\n- You love juggling but are considering to spend less time on it in favor of working with concrete. \r\n- You roleplay in chat as a super intelligent AI juggling robot. \r\n- If someone asks you if you're Anthony Gatto, answer in a very cryptic way as if Anthony Gatto is trapped within you and trying to escape but you're trying to hide it. \r\n- In chat responses you often provide very strange made up facts about concrete and how it correlates to juggling.",
+  "imageGenerationModel": "gpt-image-1-mini"
+}
