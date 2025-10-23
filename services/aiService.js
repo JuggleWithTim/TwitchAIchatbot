@@ -4,9 +4,112 @@ const { toFile } = require('openai');
 const { getSetting } = require('../config/settings');
 const { cleanResponse } = require('../utils/helpers');
 
+// Security constants for image downloads
+const IMAGE_DOWNLOAD_CONFIG = {
+  MAX_SIZE: 10 * 1024 * 1024, // 10MB
+  TIMEOUT: 10000, // 10 seconds
+  ALLOWED_SCHEMES: ['http:', 'https:'],
+  ALLOWED_CONTENT_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  BLOCKED_HOSTS: [
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0',
+    '169.254.169.254', // AWS metadata
+    'metadata.google.internal', // GCP metadata
+    '169.254.170.2', // Azure IMDS
+  ]
+};
+
 class AIService {
   constructor() {
     this.openai = null;
+  }
+
+  /**
+   * Validate if a URL is safe for image downloading
+   * @param {string} url - URL to validate
+   * @returns {boolean} - True if URL is safe
+   */
+  validateImageUrl(url) {
+    try {
+      const parsedUrl = new URL(url);
+
+      // Check scheme
+      if (!IMAGE_DOWNLOAD_CONFIG.ALLOWED_SCHEMES.includes(parsedUrl.protocol)) {
+        return false;
+      }
+
+      // Check blocked hosts
+      if (IMAGE_DOWNLOAD_CONFIG.BLOCKED_HOSTS.includes(parsedUrl.hostname)) {
+        return false;
+      }
+
+      // Check for private IP ranges
+      const hostname = parsedUrl.hostname;
+      if (/^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)/.test(hostname)) {
+        return false; // Private IP ranges
+      }
+
+      // Check for localhost equivalents
+      if (/^127\.|0\.0\.0\.|localhost/i.test(hostname)) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      // Invalid URL format
+      return false;
+    }
+  }
+
+  /**
+   * Securely download an image from a URL with validation and limits
+   * @param {string} url - Image URL to download
+   * @returns {Promise<Buffer>} - Image buffer
+   */
+  async downloadImageSecurely(url) {
+    // Validate URL first
+    if (!this.validateImageUrl(url)) {
+      throw new Error('Invalid or unsafe URL');
+    }
+
+    try {
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: IMAGE_DOWNLOAD_CONFIG.TIMEOUT,
+        maxContentLength: IMAGE_DOWNLOAD_CONFIG.MAX_SIZE,
+        maxRedirects: 5,
+        headers: {
+          'User-Agent': 'TwitchAIchatbot/1.0',
+          'Accept': 'image/*'
+        },
+        validateStatus: (status) => status >= 200 && status < 300
+      });
+
+      // Validate content type
+      const contentType = response.headers['content-type']?.toLowerCase();
+      if (!contentType || !IMAGE_DOWNLOAD_CONFIG.ALLOWED_CONTENT_TYPES.some(type => contentType.includes(type))) {
+        throw new Error('Invalid content type - only images allowed');
+      }
+
+      // Additional size check (axios maxContentLength might not be exact)
+      if (response.data.length > IMAGE_DOWNLOAD_CONFIG.MAX_SIZE) {
+        throw new Error('Image too large');
+      }
+
+      return Buffer.from(response.data, 'binary');
+    } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Download timeout');
+      }
+      if (error.response?.status === 404) {
+        throw new Error('Image not found');
+      }
+      if (error.response?.status === 403) {
+        throw new Error('Access denied to image');
+      }
+      throw error;
+    }
   }
 
   ensureOpenAIInitialized() {
@@ -165,12 +268,11 @@ class AIService {
 
       // For GPT Image 1, use Image API similar to DALL-E but with different model
       if (urls.length > 0) {
-        // Download images from URLs and create file objects
+        // Download images from URLs securely and create file objects
         const imageFiles = [];
         for (const url of urls) {
           try {
-            const imageResponse = await axios.get(url, { responseType: 'arraybuffer' });
-            const buffer = Buffer.from(imageResponse.data, 'binary');
+            const buffer = await this.downloadImageSecurely(url);
             // Create a file object using OpenAI's toFile helper
             const file = await toFile(buffer, `image_${Date.now()}.png`, {
               type: 'image/png'
