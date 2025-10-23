@@ -38,7 +38,7 @@ async function initializeBot() {
 
     // Initialize handlers
     const commandHandler = new CommandHandler(twitchClient, botState);
-    const eventHandler = new EventHandler(twitchClient);
+    const eventHandler = new EventHandler(twitchClient, botState);
     const autoMessageHandler = new AutoMessageHandler(twitchClient, botState);
 
     // Initialize web interface
@@ -48,6 +48,38 @@ async function initializeBot() {
 twitchClient.on('message', async (channel, tags, message, self) => {
   // Ignore messages from the bot itself
   if (self) return;
+
+  // Test commands for Twitch events
+  /*switch (message.toLowerCase()) {
+    case '!testsubscription':
+      twitchClient.emit('subscription', channel, 'test_subscriber', {}, '', tags);
+      return;
+    case '!testresub':
+      twitchClient.emit('resub', channel, 'test_resubscriber', 3, '', tags, {});
+      return;
+    case '!testsubmysterygift':
+      twitchClient.emit('submysterygift', channel, 'test_gifter', 5, {}, tags);
+      return;
+    case '!testsubgift':
+      twitchClient.emit('subgift', channel, 'test_gifter', 1, 'test_recipient', {}, tags);
+      return;
+    case '!testmultisubgift':
+      const recipients = ['alice', 'bob', 'carol', 'lenny'];
+      recipients.forEach(recipient => {
+        twitchClient.emit('subgift', channel, 'test_gifter', 1, recipient, { plan: '1000' }, tags);
+      });
+      return;
+    case '!testprimeupgrade':
+      twitchClient.emit('primepaidupgrade', channel, 'test_user', {}, tags);
+      return;
+    case '!testcheer':
+      twitchClient.emit('cheer', channel, { username: 'test_cheerer', bits: '100' }, message);
+      return;
+    case '!testraided':
+      twitchClient.emit('raided', channel, 'test_raider', 50);
+      return;
+    // Add more test cases here if needed
+  }*/
 
   // Add message to bot state
   botState.addMessage(`${tags.username}: ${message}`);

@@ -1,12 +1,12 @@
 const aiService = require('../services/aiService');
-const botState = require('../models/botState');
 const { getSetting } = require('../config/settings');
 const { MESSAGES } = require('../config/constants');
 const { cleanResponse } = require('../utils/helpers');
 
 class EventHandler {
-  constructor(twitchClient) {
+  constructor(twitchClient, botState) {
     this.twitchClient = twitchClient;
+    this.botState = botState;
     this.subgiftBuffer = [];
     this.subgiftInterval = null;
     this.initializeSubgiftProcessor();
@@ -44,7 +44,7 @@ class EventHandler {
    * Handle subscription event
    */
   async handleSubscription(channel, username, method, message, userstate) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     // Parse subscription details
     const subMonths = parseInt(userstate['msg-param-cumulative-months']) || 1;
@@ -52,7 +52,7 @@ class EventHandler {
                  userstate['msg-param-sub-plan'] === '2000' ? 2 : 1;
 
     // Build system prompt
-    let eventPrompt = `${botState.getSystemPrompt()}\nRespond to a new tier ${tier} subscription from ${username}. Welcome them with enthusiastic, streamer-appropriate joy.`;
+    let eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a new tier ${tier} subscription from ${username}. Welcome them with enthusiastic, streamer-appropriate joy.`;
     let logMessage = `NEW SUB: ${username} T${tier}`;
 
     // Handle the event
@@ -63,7 +63,7 @@ class EventHandler {
    * Handle resubscription event
    */
   async handleResubscription(channel, username, months, message, userstate, methods) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     // Parse resubscription details
     const subMonths = parseInt(userstate['msg-param-cumulative-months']) || months;
@@ -71,7 +71,7 @@ class EventHandler {
                  userstate['msg-param-sub-plan'] === '2000' ? 2 : 1;
 
     // Build system prompt
-    let eventPrompt = `${botState.getSystemPrompt()}\nRespond to a tier ${tier} resubscription from ${username} (${subMonths} months). Thank them for continued support. Keep it fresh and excited.`;
+    let eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a tier ${tier} resubscription from ${username} (${subMonths} months). Thank them for continued support. Keep it fresh and excited.`;
     let logMessage = `RESUB: ${username} [${subMonths}mo] T${tier}`;
 
     // Handle the event
@@ -82,13 +82,13 @@ class EventHandler {
    * Handle sub mystery gift event
    */
   async handleSubMysteryGift(channel, username, numbOfSubs, methods, userstate) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     // Parse mystery gift subscription details
     const tier = methods.plan === '3000' ? 3 :
                  methods.plan === '2000' ? 2 : 1;
     // Build system prompt
-    let eventPrompt = `${botState.getSystemPrompt()}\nRespond to a gift of ${numbOfSubs} tier ${tier} subscriptions from ${username}. Use a celebratory tone and keep it under 423 characters.`;
+    let eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a gift of ${numbOfSubs} tier ${tier} subscriptions from ${username}. Use a celebratory tone and keep it under 423 characters.`;
     let logMessage = `MYSTERY GIFT: ${username} gifted ${numbOfSubs} subs at T${tier}`;
 
     // Handle the event
@@ -99,12 +99,12 @@ class EventHandler {
    * Handle individual subgift
    */
   async handleIndividualSubgift(channel, username, streakMonths, recipient, methods, userstate) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     const tier = methods.plan === '3000' ? 3 : methods.plan === '2000' ? 2 : 1;
     const giftMonths = parseInt(userstate['msg-param-gift-months']) || 1;
 
-    let eventPrompt = `${botState.getSystemPrompt()}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Use celebratory emojis. Keep under 423 characters.`;
+    let eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a gifted tier ${tier} subscription from ${username} to ${recipient} (${giftMonths} months). Use celebratory emojis. Keep under 423 characters.`;
     let logMessage = `GIFT: ${username} → ${recipient} (${giftMonths}mo T${tier})`;
 
     await this.handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient);
@@ -114,18 +114,18 @@ class EventHandler {
    * Handle grouped subgift events
    */
   async handleGroupedSubgift(events) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     const channel = events[0].channel;
     const usernames = [...new Set(events.map(event => event.username))];
     const totalGifts = events.length;
 
-    const groupedEventPrompt = `${botState.getSystemPrompt()}\nAcknowledge a group of ${totalGifts} gifted subscriptions from these users: ${usernames.join(', ')}. Use a celebratory and grateful tone. Keep the message concise and under 423 characters.`;
+    const groupedEventPrompt = `${this.botState.getSystemPrompt()}\nAcknowledge a group of ${totalGifts} gifted subscriptions from these users: ${usernames.join(', ')}. Use a celebratory and grateful tone. Keep the message concise and under 423 characters.`;
 
     try {
       let response = await aiService.getChatResponse(
         `Grouped subgift event: ${totalGifts} gifts from ${usernames.length} users`,
-        botState.getMessageContext(),
+        this.botState.getMessageContext(),
         groupedEventPrompt
       );
 
@@ -147,7 +147,7 @@ class EventHandler {
    * Handle subgift event (buffered)
    */
   handleSubgift(channel, username, streakMonths, recipient, methods, userstate) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     if (methods && methods.wasAnonymous) {
       console.log(`Part of anonymous mystery gift - skipping individual acknowledgment.`);
@@ -161,13 +161,13 @@ class EventHandler {
    * Handle Prime subscription upgrade
    */
   async handlePrimeUpgrade(channel, username, methods, userstate) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
 
     // Prime subscriptions are considered tier 1
     const tier = 1;
 
     // Build system prompt
-    let eventPrompt = `${botState.getSystemPrompt()}\nRespond to a Prime subscription upgrade from ${username}. Welcome them with enthusiastic, streamer-appropriate joy.`;
+    let eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a Prime subscription upgrade from ${username}. Welcome them with enthusiastic, streamer-appropriate joy.`;
     let logMessage = `PRIME UPGRADE: ${username} T${tier}`;
 
     // Handle the event
@@ -182,7 +182,7 @@ class EventHandler {
       // Get AI response
       let response = await aiService.getChatResponse(
         logMessage,
-        botState.getMessageContext(),
+        this.botState.getMessageContext(),
         eventPrompt
       );
 
@@ -213,20 +213,20 @@ class EventHandler {
    * Handle cheer event
    */
   async handleCheer(channel, userstate, message) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
     if (!getSetting('enableBitsAlerts', false)) return;
 
     const username = userstate.username;
     const bits = userstate.bits;
 
-    const eventPrompt = `${botState.getSystemPrompt()}\nRespond to a cheer of ${bits} bits
+    const eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a cheer of ${bits} bits
       from ${username}. Incorporate the bit amount naturally. Casual stream-appropriate
       excitement. Keep under 423 characters.`;
 
     try {
       let response = await aiService.getChatResponse(
         `Cheer event: ${bits} bits from ${username}`,
-        botState.getMessageContext(),
+        this.botState.getMessageContext(),
         eventPrompt
       );
 
@@ -243,17 +243,17 @@ class EventHandler {
    * Handle raid event
    */
   async handleRaid(channel, username, viewers) {
-    if (botState.isPaused()) return;
+    if (this.botState.isPaused()) return;
     if (!getSetting('enableRaidsAlerts', false)) return;
 
-    const eventPrompt = `${botState.getSystemPrompt()}\nRespond to a raid from ${username}
+    const eventPrompt = `${this.botState.getSystemPrompt()}\nRespond to a raid from ${username}
       with ${viewers} viewers. Create an energetic welcome message. Include the raider
       name and viewer count naturally. Keep under 423 characters.`;
 
     try {
       let response = await aiService.getChatResponse(
         `Raid event: ${viewers} viewers from ${username}`,
-        botState.getMessageContext(),
+        this.botState.getMessageContext(),
         eventPrompt
       );
 
