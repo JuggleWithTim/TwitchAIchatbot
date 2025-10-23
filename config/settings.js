@@ -14,23 +14,6 @@ async function loadSettings() {
     SETTINGS = {};
   }
 
-  // Set default values for missing settings
-  const defaults = {
-    imageGenerationModel: 'gpt-image-1-mini'
-  };
-
-  let hasNewDefaults = false;
-  for (const [key, value] of Object.entries(defaults)) {
-    if (SETTINGS[key] === undefined) {
-      SETTINGS[key] = value;
-      hasNewDefaults = true;
-    }
-  }
-
-  if (hasNewDefaults) {
-    await saveSettings();
-  }
-
   return SETTINGS;
 }
 
