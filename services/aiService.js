@@ -6,7 +6,7 @@ const { cleanResponse } = require('../utils/helpers');
 
 // Security constants for image downloads
 const IMAGE_DOWNLOAD_CONFIG = {
-  MAX_SIZE: 10 * 1024 * 1024, // 10MB
+  MAX_SIZE: 20 * 1024 * 1024, // 20MB
   TIMEOUT: 10000, // 10 seconds
   ALLOWED_SCHEMES: ['http:', 'https:'],
   ALLOWED_CONTENT_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
