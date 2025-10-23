@@ -16,7 +16,7 @@ async function loadSettings() {
 
   // Set default values for missing settings
   const defaults = {
-    imageGenerationModel: 'dall-e-3'
+    imageGenerationModel: 'gpt-image-1-mini'
   };
 
   let hasNewDefaults = false;

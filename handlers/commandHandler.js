@@ -332,6 +332,12 @@ class CommandHandler {
         prompt = userProvidedPrompt;
       }
 
+      // Validate prompt
+      if (!prompt || prompt.trim().length < 3) {
+        this.twitchClient.say(channel, MESSAGES.NO_CONTEXT);
+        return true;
+      }
+
       // Increment quota
       const newUsage = this.botState.incrementQuota();
 

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { OpenAI } = require('openai');
+const { toFile } = require('openai');
 const { getSetting } = require('../config/settings');
 const { cleanResponse } = require('../utils/helpers');
 
@@ -121,7 +122,7 @@ class AIService {
         prompt: prompt,
         n: 1,
         size: getSetting('imageSize', '1024x1024'),
-        quality: getSetting('imageQuality', 'standard'),
+        quality: 'standard',
         response_format: 'url'
       });
 
@@ -157,35 +158,61 @@ class AIService {
       const urls = prompt.match(urlRegex) || [];
       const cleanPrompt = prompt.replace(urlRegex, '').trim();
 
-      // Build input for Responses API
-      let input;
-      if (urls.length > 0) {
-        const content = [{ type: 'input_text', text: cleanPrompt }];
-        urls.forEach(url => {
-          content.push({ type: 'input_image', image_url: url });
-        });
-        input = [{ role: 'user', content }];
-      } else {
-        input = cleanPrompt;
+      // Prevent generation with empty prompt and no URLs
+      if (!cleanPrompt && urls.length === 0) {
+        return { success: false, error: 'general', message: 'Empty prompt' };
       }
 
-      const response = await this.openai.responses.create({
-        model: 'gpt-5-mini',
-        input: input,
-        tools: [{ type: 'image_generation' }]
-      });
+      // For GPT Image 1, use Image API similar to DALL-E but with different model
+      if (urls.length > 0) {
+        // Download images from URLs and create file objects
+        const imageFiles = [];
+        for (const url of urls) {
+          try {
+            const imageResponse = await axios.get(url, { responseType: 'arraybuffer' });
+            const buffer = Buffer.from(imageResponse.data, 'binary');
+            // Create a file object using OpenAI's toFile helper
+            const file = await toFile(buffer, `image_${Date.now()}.png`, {
+              type: 'image/png'
+            });
+            imageFiles.push(file);
+          } catch (downloadError) {
+            console.error(`Failed to download image from ${url}:`, downloadError.message);
+            // Skip this URL and continue with others
+          }
+        }
 
-      const imageGenerationCall = response.output.find(output => output.type === 'image_generation_call');
-      if (imageGenerationCall && imageGenerationCall.result) {
+        if (imageFiles.length === 0) {
+          return { success: false, error: 'general', message: 'Failed to download any reference images' };
+        }
+
+        // Use edit endpoint for images with references
+        const response = await this.openai.images.edit({
+          model: 'gpt-image-1-mini',
+          image: imageFiles,
+          prompt: cleanPrompt,
+          n: 1,
+          size: getSetting('imageSize', '1024x1024'),
+          quality: getSetting('imageQuality', 'medium')
+        });
+
         return {
           success: true,
-          data: imageGenerationCall.result
+          data: response.data[0].b64_json
         };
       } else {
+        // Use generate endpoint for text-only prompts
+        const response = await this.openai.images.generate({
+          model: 'gpt-image-1-mini',
+          prompt: cleanPrompt,
+          n: 1,
+          size: getSetting('imageSize', '1024x1024'),
+          quality: getSetting('imageQuality', 'medium')
+        });
+
         return {
-          success: false,
-          error: 'general',
-          message: 'No image generated'
+          success: true,
+          data: response.data[0].b64_json
         };
       }
     } catch (error) {
@@ -223,7 +250,7 @@ class AIService {
         messages: [
           {
             role: 'system',
-            content: `Generate a concise DALL-E 3 prompt based on recent chat context. Focus on visual elements and key themes. Respond ONLY with the prompt. Format: "Vibrant [style] of [subject], [details], [medium/art style]"`
+            content: `Generate a concise image generation prompt based on recent chat context. Focus on visual elements and key themes. Respond ONLY with the prompt. Format: "Vibrant [style] of [subject], [details], [medium/art style]"`
           },
           {
             role: 'user',
