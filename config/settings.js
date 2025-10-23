@@ -13,6 +13,24 @@ async function loadSettings() {
     console.error('Error loading settings:', error);
     SETTINGS = {};
   }
+
+  // Set default values for missing settings
+  const defaults = {
+    imageGenerationModel: 'dall-e-3'
+  };
+
+  let hasNewDefaults = false;
+  for (const [key, value] of Object.entries(defaults)) {
+    if (SETTINGS[key] === undefined) {
+      SETTINGS[key] = value;
+      hasNewDefaults = true;
+    }
+  }
+
+  if (hasNewDefaults) {
+    await saveSettings();
+  }
+
   return SETTINGS;
 }
 
