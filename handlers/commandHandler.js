@@ -353,9 +353,22 @@ class CommandHandler {
         return true;
       }
 
-      // Download and save image
-      const imageBuffer = await axios.get(imageResult.url, { responseType: 'arraybuffer' });
-      const buffer = Buffer.from(imageBuffer.data, 'binary');
+      // Get image buffer
+      let buffer;
+      if (imageResult.data) {
+        // GPT Image 1 returns base64
+        buffer = Buffer.from(imageResult.data, 'base64');
+      } else if (imageResult.url) {
+        // DALL-E returns URL
+        const imageBuffer = await axios.get(imageResult.url, { responseType: 'arraybuffer' });
+        buffer = Buffer.from(imageBuffer.data, 'binary');
+      } else {
+        this.botState.quotaUsage = Math.max(0, this.botState.quotaUsage - 1); // Refund on error
+        setSetting('quotaUsage', this.botState.quotaUsage);
+        await saveSettings();
+        this.twitchClient.say(channel, MESSAGES.IMAGE_ERROR);
+        return true;
+      }
 
       await fs.mkdir(getSetting('imageOutputDir'), { recursive: true });
       const prefix = generatedFromContext ? 'c' : 'm';
@@ -403,7 +416,7 @@ class CommandHandler {
       ${COMMANDS.AI_CONTEXT} <number> - Set context history length (1-50) |
       ${COMMANDS.AI_STOP} - Pause the bot |
       ${COMMANDS.AI_START} - Resume the bot |
-      !imagine <description> - Generate AI image (DALL-E 3) |
+      !imagine <description> - Generate AI image (supports editing with image URLs) |
       ${COMMANDS.AI_HELP} - Show this help message`;
 
     this.twitchClient.say(channel, helpMessage);

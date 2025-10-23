@@ -88,7 +88,7 @@ class AIService {
   }
 
   /**
-   * Generate an image using DALL-E
+   * Generate an image using DALL-E or GPT Image 1
    * @param {string} prompt - Image generation prompt
    * @returns {Promise<Object>} - Image generation result
    */
@@ -98,6 +98,23 @@ class AIService {
       throw new Error('OpenAI client not initialized - no API key provided');
     }
 
+    const model = getSetting('imageGenerationModel', 'dall-e-3');
+
+    if (model === 'dall-e-3') {
+      return this.generateImageDalle(prompt);
+    } else if (model === 'gpt-image-1-mini') {
+      return this.generateImageGPTImage1(prompt);
+    } else {
+      throw new Error(`Unsupported image generation model: ${model}`);
+    }
+  }
+
+  /**
+   * Generate an image using DALL-E 3
+   * @param {string} prompt - Image generation prompt
+   * @returns {Promise<Object>} - Image generation result
+   */
+  async generateImageDalle(prompt) {
     try {
       const response = await this.openai.images.generate({
         model: 'dall-e-3',
@@ -113,7 +130,66 @@ class AIService {
         url: response.data[0].url
       };
     } catch (error) {
-      console.error('Image generation error:', error);
+      console.error('DALL-E image generation error:', error);
+
+      let errorType = 'general';
+      if (error.response?.data?.error?.code === 'content_policy_violation') {
+        errorType = 'content_policy';
+      }
+
+      return {
+        success: false,
+        error: errorType,
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Generate an image using GPT Image 1
+   * @param {string} prompt - Image generation prompt
+   * @returns {Promise<Object>} - Image generation result
+   */
+  async generateImageGPTImage1(prompt) {
+    try {
+      // Parse URLs from prompt
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const urls = prompt.match(urlRegex) || [];
+      const cleanPrompt = prompt.replace(urlRegex, '').trim();
+
+      // Build input for Responses API
+      let input;
+      if (urls.length > 0) {
+        const content = [{ type: 'input_text', text: cleanPrompt }];
+        urls.forEach(url => {
+          content.push({ type: 'input_image', image_url: url });
+        });
+        input = [{ role: 'user', content }];
+      } else {
+        input = cleanPrompt;
+      }
+
+      const response = await this.openai.responses.create({
+        model: 'gpt-5-mini',
+        input: input,
+        tools: [{ type: 'image_generation' }]
+      });
+
+      const imageGenerationCall = response.output.find(output => output.type === 'image_generation_call');
+      if (imageGenerationCall && imageGenerationCall.result) {
+        return {
+          success: true,
+          data: imageGenerationCall.result
+        };
+      } else {
+        return {
+          success: false,
+          error: 'general',
+          message: 'No image generated'
+        };
+      }
+    } catch (error) {
+      console.error('GPT Image 1 generation error:', error);
 
       let errorType = 'general';
       if (error.response?.data?.error?.code === 'content_policy_violation') {
