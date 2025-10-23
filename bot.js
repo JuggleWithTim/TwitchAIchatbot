@@ -3,7 +3,7 @@ const tmi = require('tmi.js');
 const { OpenAI } = require('openai');
 
 // Import our modules
-const { loadSettings, getSetting } = require('./config/settings');
+const { loadSettings, getSetting, getSettings } = require('./config/settings');
 const { MESSAGES } = require('./config/constants');
 const aiService = require('./services/aiService');
 const CommandHandler = require('./handlers/commandHandler');
@@ -11,6 +11,7 @@ const EventHandler = require('./handlers/eventHandler');
 const AutoMessageHandler = require('./handlers/autoMessageHandler');
 const WebInterface = require('./web/webInterface');
 const BotState = require('./models/botState');
+const discordBot = require('./discordbot.js');
 
 // Main initialization function
 async function initializeBot() {
@@ -22,6 +23,14 @@ async function initializeBot() {
     const openai = new OpenAI({
       apiKey: getSetting('openaiApiKey'),
     });
+
+    // Initialize Discord bot if enabled
+    if (getSetting('enableDiscordBot') && getSetting('discordBotToken')) {
+      discordBot.initializeDiscord(getSettings(), openai);
+      discordBot.loginDiscord(getSetting('discordBotToken'));
+    } else {
+      console.log('Discord bot is disabled or token missing in settings.');
+    }
 
     // Initialize Twitch client
     const twitchClient = new tmi.Client({
