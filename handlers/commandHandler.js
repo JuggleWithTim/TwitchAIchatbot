@@ -338,6 +338,25 @@ class CommandHandler {
         return true;
       }
 
+      // Send immediate excited response
+      const excitedPrompt = `A user has requested an image with the prompt: "${prompt}". Respond excitedly that you've started working on it and it will be ready soon.`;
+      const context = this.botState.getMessageContext();
+      try {
+        let excitedResponse = await aiService.getChatResponse(excitedPrompt, context, this.botState.getSystemPrompt());
+        excitedResponse = excitedResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+        if (!excitedResponse) {
+          excitedResponse = "Ooh, I'm so excited to create this image! I've started working on it and it should be ready soon!";
+        }
+        this.twitchClient.say(channel, `@${tags.username}, ${excitedResponse}`);
+        this.botState.addMessage(`${getSetting('username')}: ${excitedResponse}`);
+      } catch (error) {
+        console.error('Excited response error:', error);
+        // Fallback message
+        const fallback = "Ooh, I'm so excited to create this image! I've started working on it and it should be ready soon!";
+        this.twitchClient.say(channel, `@${tags.username}, ${fallback}`);
+        this.botState.addMessage(`${getSetting('username')}: ${fallback}`);
+      }
+
       // Increment quota
       const newUsage = this.botState.incrementQuota();
 
@@ -350,10 +369,10 @@ class CommandHandler {
         await saveSettings();
 
         let errorMessage = MESSAGES.IMAGE_ERROR;
-        if (imageResult.error === 'content_policy') {
-          errorMessage = MESSAGES.CONTENT_POLICY_ERROR;
-        } else if (!userProvidedPrompt) {
+        if (!userProvidedPrompt) {
           errorMessage = MESSAGES.CONTEXT_ERROR;
+        } else if (imageResult.error && imageResult.error !== 'general') {
+          errorMessage += ` (${imageResult.error})`;
         }
         this.twitchClient.say(channel, errorMessage);
         return true;

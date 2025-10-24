@@ -237,8 +237,9 @@ class AIService {
       console.error('DALL-E image generation error:', error);
 
       let errorType = 'general';
-      if (error.response?.data?.error?.code === 'content_policy_violation') {
-        errorType = 'content_policy';
+      const errorCode = error.code || error.response?.data?.error?.code;
+      if (errorCode) {
+        errorType = errorCode;
       }
 
       return {
@@ -321,8 +322,9 @@ class AIService {
       console.error('GPT Image 1 generation error:', error);
 
       let errorType = 'general';
-      if (error.response?.data?.error?.code === 'content_policy_violation') {
-        errorType = 'content_policy';
+      const errorCode = error.code || error.response?.data?.error?.code;
+      if (errorCode) {
+        errorType = errorCode;
       }
 
       return {
