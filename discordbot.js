@@ -62,7 +62,7 @@ function initializeDiscord(settings, openaiInstance) {
     }
   }
 
-  discordClient.on('ready', () => {
+  discordClient.on('clientReady', () => {
     console.log(`Discord bot logged in as ${discordClient.user.tag}`);
   });
 
