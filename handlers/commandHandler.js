@@ -32,18 +32,18 @@ class CommandHandler {
     const username = tags.username;
 
     // AI Bot promo
-    if (message.toLowerCase().startsWith(COMMANDS.AI_BOT)) {
+    if (message.toLowerCase() === COMMANDS.AI_BOT) {
       this.twitchClient.say(channel, MESSAGES.AI_BOT_PROMO);
       return true;
     }
 
     // Hug command
-    if (message.toLowerCase().startsWith(COMMANDS.HUG)) {
+    if (message.toLowerCase().startsWith(COMMANDS.HUG + ' ') || message.toLowerCase() === COMMANDS.HUG) {
       return await this.handleHugCommand(channel, tags, message);
     }
 
     // Shoutout command
-    if (message.toLowerCase().startsWith(COMMANDS.SO)) {
+    if (message.toLowerCase().startsWith(COMMANDS.SO + ' ') || message.toLowerCase() === COMMANDS.SO) {
       return await this.handleShoutoutCommand(channel, tags, message);
     }
 
@@ -64,12 +64,12 @@ class CommandHandler {
     }
 
     // Timer setting
-    if (message.toLowerCase().startsWith(COMMANDS.AI_TIMER)) {
+    if (message.toLowerCase().startsWith(COMMANDS.AI_TIMER + ' ') || message.toLowerCase() === COMMANDS.AI_TIMER) {
       return await this.handleTimerSetting(channel, tags, message);
     }
 
     // System prompt commands
-    if (message.toLowerCase().startsWith(COMMANDS.AI_SYS_PROMPT)) {
+    if (message.toLowerCase().startsWith(COMMANDS.AI_SYS_PROMPT + ' ') || message.toLowerCase() === COMMANDS.AI_SYS_PROMPT) {
       return await this.handleSystemPromptUpdate(channel, tags, message);
     }
     if (message.toLowerCase() === COMMANDS.AI_RESET_PROMPT) {
@@ -85,7 +85,7 @@ class CommandHandler {
     }
 
     // Context length
-    if (message.toLowerCase().startsWith(COMMANDS.AI_CONTEXT)) {
+    if (message.toLowerCase().startsWith(COMMANDS.AI_CONTEXT + ' ') || message.toLowerCase() === COMMANDS.AI_CONTEXT) {
       return await this.handleContextLength(channel, tags, message);
     }
 
