@@ -8,6 +8,8 @@ class BotState {
     this.waifus = [];
     this.quotaUsage = 0;
     this.quotaResetTimer = null;
+    this.userResponseCounts = new Map();
+    this.userResponseResetTimer = null;
     this.lastBotMentionTime = getTimestamp();
     this.botPaused = false;
     this.systemPrompt = '';
@@ -23,6 +25,7 @@ class BotState {
     this.botPaused = false; // Always start unpaused
     this.updateSystemPrompt();
     this.startQuotaResetTimer();
+    this.startUserResponseResetTimer();
   }
 
   /**
@@ -292,6 +295,66 @@ class BotState {
   }
 
   /**
+   * Increment user response count
+   * @param {string} username - Username to increment
+   * @returns {number} - New count
+   */
+  incrementUserResponseCount(username) {
+    const count = this.userResponseCounts.get(username) || 0;
+    const newCount = count + 1;
+    this.userResponseCounts.set(username, newCount);
+    return newCount;
+  }
+
+  /**
+   * Get user response count
+   * @param {string} username - Username to check
+   * @returns {number} - Current count
+   */
+  getUserResponseCount(username) {
+    return this.userResponseCounts.get(username) || 0;
+  }
+
+  /**
+   * Check if bot can respond to user
+   * @param {string} username - Username to check
+   * @returns {boolean} - True if can respond
+   */
+  canRespondToUser(username) {
+    return this.getUserResponseCount(username) < 5;
+  }
+
+  /**
+   * Check if this is the limit response for user
+   * @param {string} username - Username to check
+   * @returns {boolean} - True if this is the 5th response
+   */
+  isLimitResponse(username) {
+    return this.getUserResponseCount(username) === 4;
+  }
+
+  /**
+   * Reset all user response counts
+   */
+  resetUserResponseCounts() {
+    this.userResponseCounts.clear();
+    //console.log('User response counts have been reset');
+  }
+
+  /**
+   * Start the user response reset timer
+   */
+  startUserResponseResetTimer() {
+    if (this.userResponseResetTimer) {
+      clearInterval(this.userResponseResetTimer);
+    }
+
+    this.userResponseResetTimer = setInterval(() => {
+      this.resetUserResponseCounts();
+    }, CHECK_INTERVALS.USER_RESPONSE_RESET);
+  }
+
+  /**
    * Get state summary for debugging
    * @returns {Object} - State summary
    */
@@ -301,7 +364,8 @@ class BotState {
       waifus: this.waifus,
       quotaUsage: this.quotaUsage,
       botPaused: this.botPaused,
-      lastMentionTime: new Date(this.lastBotMentionTime).toISOString()
+      lastMentionTime: new Date(this.lastBotMentionTime).toISOString(),
+      userResponseCounts: Object.fromEntries(this.userResponseCounts)
     };
   }
 }

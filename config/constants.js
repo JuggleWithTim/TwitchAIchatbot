@@ -35,7 +35,8 @@ const IMAGE_COMMAND_ALIASES = ['!imagine', '!create', '!image'];
 const CHECK_INTERVALS = {
   AUTO_MESSAGE: 1200000, // 20 minutes
   SUBGIFT_PROCESS: 1000, // 1 second
-  QUOTA_RESET: 24 * 60 * 60 * 1000 // 24 hours
+  QUOTA_RESET: 24 * 60 * 60 * 1000, // 24 hours
+  USER_RESPONSE_RESET: 5 * 60 * 1000 // 5 minutes
 };
 
 // === API ENDPOINTS === //
