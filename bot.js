@@ -102,6 +102,11 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
   const botUsername = twitchClient.getUsername().toLowerCase();
   if (message.toLowerCase().includes(botUsername)) {
+    // Check if we can respond to this user
+    if (!botState.canRespondToUser(tags.username)) {
+      return; // Ignore messages from users who have reached the limit
+    }
+
     botState.updateLastMentionTime();
 
     const userMessage = message.replace(new RegExp(`@${botUsername}`, 'i'), '').trim();
@@ -110,6 +115,11 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     let prompt = botState.getSystemPrompt();
     if (botState.isWaifu(tags.username)) {
       prompt += '\nRemember, you are the waifu of this user UwU, respond with extra love and passion.';
+    }
+
+    // If this is the limit response, modify prompt to generate a goodbye message
+    if (botState.isLimitResponse(tags.username)) {
+      prompt += '\nIMPORTANT: This is your final response to this user in this conversation. Respond with a polite message indicating that you\'ve enjoyed the conversation but your social battery is running low and you need to take a break. Keep it friendly and suggest chatting again later.';
     }
 
     try {
@@ -122,11 +132,17 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
       twitchClient.say(channel, `@${tags.username}, ${response}`);
       botState.addMessage(`${getSetting('username')}: ${response}`);
+
+      // Increment the response count after successful response
+      botState.incrementUserResponseCount(tags.username);
     } catch (error) {
       console.error('Chat response error:', error);
       const fallback = getSetting('fallbackMessage', 'Ooooops, something went wrong');
       twitchClient.say(channel, `@${tags.username}, ${fallback}`);
       botState.addMessage(`${getSetting('username')}: ${fallback}`);
+
+      // Still increment count even on error to prevent spam
+      botState.incrementUserResponseCount(tags.username);
     }
   }
 });
