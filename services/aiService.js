@@ -404,9 +404,9 @@ Follow these steps for each interaction:
   }
 
   /**
-   * Extract and update memory from conversation
+   * Extract and update memory from user's message only
    * @param {string} userMessage - User's message
-   * @param {string} botResponse - Bot's response
+   * @param {string} botResponse - Bot's response (not used for extraction)
    * @param {string} userId - User identifier
    */
   async updateMemoryFromResponse(userMessage, botResponse, userId = 'default_user') {
@@ -417,13 +417,16 @@ Follow these steps for each interaction:
     }
 
     try {
-      // Use AI to extract memory-worthy information from the conversation
-      const extractionPrompt = `Analyze this conversation and extract any new information that falls into these categories:
+      // Use AI to extract memory-worthy information from the USER'S MESSAGE ONLY
+      // Do NOT include bot responses as they contain information the bot provided, not user information
+      const extractionPrompt = `Analyze what this user said and extract any new information that falls into these categories:
 - Basic Identity (age, gender, location, job title, education level, etc.)
 - Behaviors (interests, habits, etc.)
 - Preferences (communication style, preferred language, etc.)
 - Goals (goals, targets, aspirations, etc.)
 - Relationships (personal and professional relationships up to 3 degrees of separation)
+
+IMPORTANT: Only extract information that the user actually provided about themselves or others. Do NOT extract information that appears to be what the bot knows or is telling the user.
 
 Format your response as a JSON object with these possible keys:
 {
@@ -441,10 +444,9 @@ Format your response as a JSON object with these possible keys:
   ]
 }
 
-Only include categories that have new information. If no new information, return empty object {}.
+Only include categories that have new information from the user's message. If no new information, return empty object {}.
 
-User: ${userMessage}
-Bot: ${botResponse}`;
+User's message: ${userMessage}`;
 
       const extractionResponse = await this.openai.chat.completions.create({
         model: getSetting('openaiModelName', 'gpt-4o-mini'),

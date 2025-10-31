@@ -123,8 +123,8 @@ class CommandHandler {
     const context = this.botState.getMessageContext();
 
     try {
-      let response = await aiService.getChatResponse(hugPrompt, context, this.botState.getSystemPrompt());
-      response = response.replace(/(@[a-zA-Z0-9_]+)([.!?,:;])/g, '$1 $2');
+      const result = await aiService.getChatResponse(hugPrompt, context, this.botState.getSystemPrompt());
+      let response = result.response.replace(/(@[a-zA-Z0-9_]+)([.!?,:;])/g, '$1 $2');
       this.twitchClient.say(channel, response);
       this.botState.addMessage(`${getSetting('username')}: ${response}`);
     } catch (error) {
@@ -162,8 +162,8 @@ class CommandHandler {
     const soUserMsg = `Generate a shoutout for ${user.display_name} that will hype up viewers to check their channel. Include information about their latest stream. Include their Twitch link ("https://twitch.tv/${user.login}") as-is, with no punctuation (like ! or .) immediately after the link.`;
 
     try {
-      let aiSoMsg = await aiService.getChatResponse(soUserMsg, context, this.botState.getSystemPrompt());
-      aiSoMsg = aiSoMsg.replace(/(https:\/\/twitch\.tv\/[a-zA-Z0-9_]+)([.,!?)])/g, '$1 $2');
+      const result = await aiService.getChatResponse(soUserMsg, context, this.botState.getSystemPrompt());
+      let aiSoMsg = result.response.replace(/(https:\/\/twitch\.tv\/[a-zA-Z0-9_]+)([.,!?)])/g, '$1 $2');
       this.twitchClient.say(channel, aiSoMsg);
     } catch (error) {
       console.error('Shoutout AI error:', error);
@@ -342,8 +342,8 @@ class CommandHandler {
       const excitedPrompt = `A user has requested an image with the prompt: "${prompt}". Respond excitedly that you've started working on it and it will be ready soon.`;
       const context = this.botState.getMessageContext();
       try {
-        let excitedResponse = await aiService.getChatResponse(excitedPrompt, context, this.botState.getSystemPrompt());
-        excitedResponse = excitedResponse.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+        const excitedResult = await aiService.getChatResponse(excitedPrompt, context, this.botState.getSystemPrompt());
+        let excitedResponse = excitedResult.response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
         if (!excitedResponse) {
           excitedResponse = "Ooh, I'm so excited to create this image! I've started working on it and it should be ready soon!";
         }
