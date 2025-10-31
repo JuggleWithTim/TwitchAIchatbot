@@ -107,6 +107,11 @@ class CommandHandler {
       return await this.handlePassiveLearningToggle(channel, tags);
     }
 
+    // Memory toggle
+    if (message.toLowerCase() === COMMANDS.AI_MEMORY) {
+      return await this.handleMemoryToggle(channel, tags);
+    }
+
     // Help command
     if (message.toLowerCase() === COMMANDS.AI_HELP) {
       return await this.handleHelpCommand(channel, tags);
@@ -237,6 +242,22 @@ class CommandHandler {
     const message = newState
       ? 'Passive learning is now enabled. The bot will learn from all messages in the background. 🧠📚'
       : 'Passive learning is now disabled. The bot will only learn when directly addressed. 🔇🧠';
+    this.twitchClient.say(channel, message);
+    this.botState.addMessage(`${getSetting('username')}: ${message}`);
+    return true;
+  }
+
+  async handleMemoryToggle(channel, tags) {
+    if (!hasElevatedPrivileges(tags)) return false;
+
+    const currentState = getSetting('enableMemory', false);
+    const newState = !currentState;
+    setSetting('enableMemory', newState ? 1 : 0);
+    await saveSettings();
+
+    const message = newState
+      ? 'Persistent memory is now enabled. The bot will remember and retrieve user information. 🧠💾'
+      : 'Persistent memory is now disabled. The bot will not store or retrieve user information. 🔇🧠';
     this.twitchClient.say(channel, message);
     this.botState.addMessage(`${getSetting('username')}: ${message}`);
     return true;
@@ -456,6 +477,7 @@ class CommandHandler {
 
     const helpMessage = `Available commands:
       ${COMMANDS.AI_AUTO} - Toggle auto-messages on/off |
+      ${COMMANDS.AI_MEMORY} - Toggle persistent memory on/off |
       ${COMMANDS.AI_PASSIVE_LEARNING} - Toggle passive learning on/off |
       ${COMMANDS.AI_TIMER} <minutes> - Set auto-message timer |
       ${COMMANDS.AI_SYS_PROMPT} <new prompt> - Update system prompt |

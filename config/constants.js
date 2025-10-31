@@ -26,6 +26,7 @@ const COMMANDS = {
   IMAGE: '!image',
   AI_RESET_QUOTA: '!airesetquota',
   AI_PASSIVE_LEARNING: '!aipassive',
+  AI_MEMORY: '!aimemory',
   AI_HELP: '!aihelp'
 };
 
