@@ -125,6 +125,96 @@ class AIService {
   }
 
   /**
+   * Create a GPT-5 response using the Responses API
+   * @param {string} input - Input text
+   * @param {string} reasoningEffort - Reasoning effort level
+   * @param {string} verbosity - Output verbosity level
+   * @returns {Promise<Object>} - GPT-5 response
+   */
+  async createGPT5Response(input, reasoningEffort = 'minimal', verbosity = 'low') {
+    this.ensureOpenAIInitialized();
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized - no API key provided');
+    }
+
+    try {
+      const response = await this.openai.responses.create({
+        model: 'gpt-5-nano',
+        input: input,
+        reasoning: { effort: reasoningEffort },
+        text: { verbosity: verbosity },
+        max_output_tokens: 500
+      });
+
+      return {
+        success: true,
+        output: response.output_text,
+        reasoning: response.reasoning_items
+      };
+    } catch (error) {
+      console.error('GPT-5 API error:', error);
+      return {
+        success: false,
+        error: error.message,
+        fallback: true
+      };
+    }
+  }
+
+  /**
+   * Extract memory information using the appropriate AI model
+   * @param {string} extractionPrompt - The prompt for memory extraction
+   * @returns {Promise<Object>} - Parsed memory information object
+   */
+  async extractMemoryWithAI(extractionPrompt) {
+    this.ensureOpenAIInitialized();
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized');
+    }
+
+    // Always try GPT-5-nano first for cost optimization, fallback to settings model
+    let extractedText;
+
+    const gpt5Response = await this.createGPT5Response(extractionPrompt, 'minimal', 'low');
+    if (gpt5Response.success) {
+      extractedText = cleanResponse(gpt5Response.output);
+    } else {
+      // Fallback to settings model if GPT-5 fails
+      console.log('Memory extraction: GPT-5-nano failed, falling back to settings model');
+      const extractionResponse = await this.openai.chat.completions.create({
+        model: getSetting('openaiModelName', 'gpt-4o-mini'),
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: extractionPrompt
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.3
+      });
+      extractedText = cleanResponse(extractionResponse.choices[0].message.content);
+    }
+
+    // Parse the JSON response
+    try {
+      // Clean up the response to ensure it's valid JSON
+      const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      } else {
+        return JSON.parse(extractedText);
+      }
+    } catch (parseError) {
+      console.error('Failed to parse memory extraction response:', extractedText);
+      return {}; // Return empty object on parse error
+    }
+  }
+
+  /**
    * Get chat response from AI (OpenAI or Ollama) with optional memory integration
    * @param {string} userMessage - The user's message
    * @param {string} context - Chat context
@@ -282,124 +372,54 @@ Follow these steps for each interaction:
   }
 
   /**
-   * Generate an image using DALL-E 3
-   * @param {string} prompt - Image generation prompt
-   * @returns {Promise<Object>} - Image generation result
+   * Extract and update memory from user's message only
+   * @param {string} userMessage - User's message
+   * @param {string} botResponse - Bot's response (not used for extraction)
+   * @param {string} userId - User identifier
    */
-  async generateImageDalle(prompt) {
+  async updateMemoryFromResponse(userMessage, botResponse, userId = 'default_user') {
     try {
-      const response = await this.openai.images.generate({
-        model: 'dall-e-3',
-        prompt: prompt,
-        n: 1,
-        size: getSetting('imageSize', '1024x1024'),
-        quality: 'standard',
-        response_format: 'url'
-      });
+      // Build the extraction prompt
+      const extractionPrompt = `Analyze what this user said and extract any new information that falls into these categories:
+- Basic Identity (age, gender, location, job title, education level, etc.)
+- Behaviors (interests, habits, etc.)
+- Preferences (communication style, preferred language, etc.)
+- Goals (goals, targets, aspirations, etc.)
+- Relationships (personal and professional relationships up to 3 degrees of separation)
 
-      return {
-        success: true,
-        url: response.data[0].url
-      };
-    } catch (error) {
-      console.error('DALL-E image generation error:', error);
+IMPORTANT: Only extract information that the user actually provided about themselves or others. Do NOT extract information that appears to be what the bot knows or is telling the user.
 
-      let errorType = 'general';
-      const errorCode = error.code || error.response?.data?.error?.code;
-      if (errorCode) {
-        errorType = errorCode;
-      }
-
-      return {
-        success: false,
-        error: errorType,
-        message: error.message
-      };
+Format your response as a JSON object with these possible keys:
+{
+  "identity": ["fact1", "fact2"],
+  "behaviors": ["behavior1", "behavior2"],
+  "preferences": ["preference1", "preference2"],
+  "goals": ["goal1", "goal2"],
+  "relationships": [
+    {
+      "entity": "entity_name",
+      "entityType": "person|organization|event",
+      "relationType": "works_at|friends_with|family_of|etc",
+      "observations": ["fact about entity"]
     }
-  }
+  ]
+}
 
-  /**
-   * Generate an image using GPT Image 1
-   * @param {string} prompt - Image generation prompt
-   * @returns {Promise<Object>} - Image generation result
-   */
-  async generateImageGPTImage1(prompt) {
-    try {
-      // Parse URLs from prompt
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const urls = prompt.match(urlRegex) || [];
-      const cleanPrompt = prompt.replace(urlRegex, '').trim();
+Only include categories that have new information from the user's message. If no new information, return empty object {}.
 
-      // Prevent generation with empty prompt and no URLs
-      if (!cleanPrompt && urls.length === 0) {
-        return { success: false, error: 'general', message: 'Empty prompt' };
+User's message: ${userMessage}`;
+
+      // Use shared helper method for AI extraction
+      const newInfo = await this.extractMemoryWithAI(extractionPrompt);
+
+      // Only update if there's actual new information
+      if (Object.keys(newInfo).length > 0) {
+        console.log('Updating memory with new information:', newInfo);
+        await memoryService.updateMemory(userId, newInfo);
       }
 
-      // For GPT Image 1, use Image API similar to DALL-E but with different model
-      if (urls.length > 0) {
-        // Download images from URLs securely and create file objects
-        const imageFiles = [];
-        for (const url of urls) {
-          try {
-            const buffer = await this.downloadImageSecurely(url);
-            // Create a file object using OpenAI's toFile helper
-            const file = await toFile(buffer, `image_${Date.now()}.png`, {
-              type: 'image/png'
-            });
-            imageFiles.push(file);
-          } catch (downloadError) {
-            console.error(`Failed to download image from ${url}:`, downloadError.message);
-            // Skip this URL and continue with others
-          }
-        }
-
-        if (imageFiles.length === 0) {
-          return { success: false, error: 'general', message: 'Failed to download any reference images' };
-        }
-
-        // Use edit endpoint for images with references
-        const response = await this.openai.images.edit({
-          model: 'gpt-image-1-mini',
-          image: imageFiles,
-          prompt: cleanPrompt,
-          n: 1,
-          size: getSetting('imageSize', '1024x1024'),
-          quality: getSetting('imageQuality', 'medium')
-        });
-
-        return {
-          success: true,
-          data: response.data[0].b64_json
-        };
-      } else {
-        // Use generate endpoint for text-only prompts
-        const response = await this.openai.images.generate({
-          model: 'gpt-image-1-mini',
-          prompt: cleanPrompt,
-          n: 1,
-          size: getSetting('imageSize', '1024x1024'),
-          quality: getSetting('imageQuality', 'medium')
-        });
-
-        return {
-          success: true,
-          data: response.data[0].b64_json
-        };
-      }
     } catch (error) {
-      console.error('GPT Image 1 generation error:', error);
-
-      let errorType = 'general';
-      const errorCode = error.code || error.response?.data?.error?.code;
-      if (errorCode) {
-        errorType = errorCode;
-      }
-
-      return {
-        success: false,
-        error: errorType,
-        message: error.message
-      };
+      console.error('Error updating memory from response:', error);
     }
   }
 
@@ -417,14 +437,8 @@ Follow these steps for each interaction:
       return;
     }
 
-    this.ensureOpenAIInitialized();
-    if (!this.openai) {
-      console.warn('OpenAI not initialized, skipping passive memory extraction');
-      return;
-    }
-
     try {
-      // Use AI to extract memory-worthy information from the user's message
+      // Build the extraction prompt
       const extractionPrompt = `Analyze what this user said and extract any new information that falls into these categories:
 - Basic Identity (age, gender, location, job title, education level, etc.)
 - Behaviors (interests, habits, etc.)
@@ -454,38 +468,8 @@ Only include categories that have new information from the user's message. If no
 
 User's message: ${userMessage}`;
 
-      const extractionResponse = await this.openai.chat.completions.create({
-        model: getSetting('openaiModelName', 'gpt-4o-mini'),
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: extractionPrompt
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.3
-      });
-
-      const extractedText = cleanResponse(extractionResponse.choices[0].message.content);
-
-      // Parse the JSON response
-      let newInfo;
-      try {
-        // Clean up the response to ensure it's valid JSON
-        const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          newInfo = JSON.parse(jsonMatch[0]);
-        } else {
-          newInfo = JSON.parse(extractedText);
-        }
-      } catch (parseError) {
-        console.error('Failed to parse passive memory extraction response:', extractedText);
-        return;
-      }
+      // Use shared helper method for AI extraction
+      const newInfo = await this.extractMemoryWithAI(extractionPrompt);
 
       // Only update if there's actual new information
       if (Object.keys(newInfo).length > 0) {
@@ -498,94 +482,7 @@ User's message: ${userMessage}`;
     }
   }
 
-  /**
-   * Extract and update memory from user's message only
-   * @param {string} userMessage - User's message
-   * @param {string} botResponse - Bot's response (not used for extraction)
-   * @param {string} userId - User identifier
-   */
-  async updateMemoryFromResponse(userMessage, botResponse, userId = 'default_user') {
-    this.ensureOpenAIInitialized();
-    if (!this.openai) {
-      console.warn('OpenAI not initialized, skipping memory update');
-      return;
-    }
 
-    try {
-      // Use AI to extract memory-worthy information from the USER'S MESSAGE ONLY
-      // Do NOT include bot responses as they contain information the bot provided, not user information
-      const extractionPrompt = `Analyze what this user said and extract any new information that falls into these categories:
-- Basic Identity (age, gender, location, job title, education level, etc.)
-- Behaviors (interests, habits, etc.)
-- Preferences (communication style, preferred language, etc.)
-- Goals (goals, targets, aspirations, etc.)
-- Relationships (personal and professional relationships up to 3 degrees of separation)
-
-IMPORTANT: Only extract information that the user actually provided about themselves or others. Do NOT extract information that appears to be what the bot knows or is telling the user.
-
-Format your response as a JSON object with these possible keys:
-{
-  "identity": ["fact1", "fact2"],
-  "behaviors": ["behavior1", "behavior2"],
-  "preferences": ["preference1", "preference2"],
-  "goals": ["goal1", "goal2"],
-  "relationships": [
-    {
-      "entity": "entity_name",
-      "entityType": "person|organization|event",
-      "relationType": "works_at|friends_with|family_of|etc",
-      "observations": ["fact about entity"]
-    }
-  ]
-}
-
-Only include categories that have new information from the user's message. If no new information, return empty object {}.
-
-User's message: ${userMessage}`;
-
-      const extractionResponse = await this.openai.chat.completions.create({
-        model: getSetting('openaiModelName', 'gpt-4o-mini'),
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: extractionPrompt
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.3
-      });
-
-      const extractedText = cleanResponse(extractionResponse.choices[0].message.content);
-
-      // Parse the JSON response
-      let newInfo;
-      try {
-        // Clean up the response to ensure it's valid JSON
-        const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          newInfo = JSON.parse(jsonMatch[0]);
-        } else {
-          newInfo = JSON.parse(extractedText);
-        }
-      } catch (parseError) {
-        console.error('Failed to parse memory extraction response:', extractedText);
-        return;
-      }
-
-      // Only update if there's actual new information
-      if (Object.keys(newInfo).length > 0) {
-        console.log('Updating memory with new information:', newInfo);
-        await memoryService.updateMemory(userId, newInfo);
-      }
-
-    } catch (error) {
-      console.error('Error updating memory from response:', error);
-    }
-  }
 
   /**
    * Generate image prompt from chat context
