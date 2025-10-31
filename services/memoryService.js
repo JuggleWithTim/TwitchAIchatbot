@@ -187,6 +187,9 @@ class MemoryService {
    * @param {Object} newInfo - New information to store
    */
   async updateMemory(userId = 'default_user', newInfo) {
+    // Normalize userId to lowercase (Twitch usernames are case-insensitive)
+    const normalizedUserId = userId.toLowerCase();
+
     const entities = [];
     const relations = [];
     const observations = [];
@@ -194,7 +197,7 @@ class MemoryService {
     // Create user entity if it doesn't exist
     if (newInfo.identity || newInfo.behaviors || newInfo.preferences || newInfo.goals) {
       entities.push({
-        name: userId,
+        name: normalizedUserId,
         entityType: 'person',
         observations: []
       });
@@ -203,28 +206,28 @@ class MemoryService {
     // Add observations for different categories
     if (newInfo.identity && Array.isArray(newInfo.identity)) {
       observations.push({
-        entityName: userId,
+        entityName: normalizedUserId,
         contents: newInfo.identity
       });
     }
 
     if (newInfo.behaviors && Array.isArray(newInfo.behaviors)) {
       observations.push({
-        entityName: userId,
+        entityName: normalizedUserId,
         contents: newInfo.behaviors
       });
     }
 
     if (newInfo.preferences && Array.isArray(newInfo.preferences)) {
       observations.push({
-        entityName: userId,
+        entityName: normalizedUserId,
         contents: newInfo.preferences
       });
     }
 
     if (newInfo.goals && Array.isArray(newInfo.goals)) {
       observations.push({
-        entityName: userId,
+        entityName: normalizedUserId,
         contents: newInfo.goals
       });
     }
@@ -233,17 +236,20 @@ class MemoryService {
     if (newInfo.relationships && Array.isArray(newInfo.relationships)) {
       newInfo.relationships.forEach(rel => {
         if (rel.entity && rel.relationType) {
+          // Normalize entity name to lowercase (Twitch usernames are case-insensitive)
+          const normalizedEntityName = rel.entity.toLowerCase();
+
           // Create the related entity
           entities.push({
-            name: rel.entity,
+            name: normalizedEntityName,
             entityType: rel.entityType || 'person',
             observations: rel.observations || []
           });
 
           // Create the relation
           relations.push({
-            from: userId,
-            to: rel.entity,
+            from: normalizedUserId,
+            to: normalizedEntityName,
             relationType: rel.relationType
           });
         }
