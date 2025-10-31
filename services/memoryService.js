@@ -1,81 +1,89 @@
 const path = require('path');
-const { promises: fs } = require('fs');
+const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
 
 class MemoryService {
   constructor() {
+    this.memoryProcess = null;
+    this.client = null;
+    this.isConnected = false;
     this.memoryFilePath = path.join(process.cwd(), 'memory.json');
-    this.isInitialized = false;
   }
 
   /**
-   * Initialize the memory service
+   * Initialize the memory service by starting the MCP server
    */
   async initialize() {
-    this.isInitialized = true;
-    console.log('Memory service initialized successfully');
-  }
+    const memoryFilePath = this.memoryFilePath;
 
-  /**
-   * Stop the memory service
-   */
-  stopMemoryServer() {
-    this.isInitialized = false;
-  }
-
-  /**
-   * Load the knowledge graph from file
-   */
-  async loadGraph() {
-    try {
-      const data = await fs.readFile(this.memoryFilePath, 'utf-8');
-      const lines = data.split('\n').filter(line => line.trim() !== '');
-      return lines.reduce((graph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === 'entity') graph.entities.push(item);
-        if (item.type === 'relation') graph.relations.push(item);
-        return graph;
-      }, { entities: [], relations: [] });
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return { entities: [], relations: [] };
+    // Create MCP client transport with server parameters
+    const transport = new StdioClientTransport({
+      command: 'npx',
+      args: ['@modelcontextprotocol/server-memory'],
+      env: {
+        ...process.env,
+        MEMORY_FILE_PATH: memoryFilePath
       }
+    });
+
+    // Create and connect MCP client
+    this.client = new Client(
+      {
+        name: 'twitch-ai-chatbot',
+        version: '1.0.0',
+      },
+      {
+        capabilities: {},
+      }
+    );
+
+    try {
+      await this.client.connect(transport);
+      this.isConnected = true;
+      console.log('Memory service connected successfully via MCP');
+    } catch (error) {
+      console.error('Failed to connect to memory service:', error);
       throw error;
     }
   }
 
   /**
-   * Save the knowledge graph to file
+   * Stop the memory service
    */
-  async saveGraph(graph) {
-    const lines = [
-      ...graph.entities.map(e => JSON.stringify({
-        type: 'entity',
-        name: e.name,
-        entityType: e.entityType,
-        observations: e.observations
-      })),
-      ...graph.relations.map(r => JSON.stringify({
-        type: 'relation',
-        from: r.from,
-        to: r.to,
-        relationType: r.relationType
-      })),
-    ];
-    await fs.writeFile(this.memoryFilePath, lines.join('\n'));
+  async stopMemoryServer() {
+    if (this.client) {
+      await this.client.close();
+      this.client = null;
+    }
+    this.isConnected = false;
   }
 
+
+
   /**
-   * Retrieve all relevant memory for a user
+   * Retrieve all relevant memory for a user using MCP tools
    * @param {string} userId - User identifier
    * @returns {Promise<Object>} - Memory data
    */
   async retrieveMemory(userId = 'default_user') {
-    if (!this.isInitialized) {
-      throw new Error('Memory service not initialized');
+    if (!this.isConnected || !this.client) {
+      throw new Error('Memory service not connected');
     }
 
     try {
-      const graph = await this.loadGraph();
+      // Get the full graph using MCP tool
+      const graphResult = await this.client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'read_graph',
+            arguments: {}
+          }
+        },
+        undefined
+      );
+
+      const graph = graphResult.content ? JSON.parse(graphResult.content[0].text) : { entities: [], relations: [] };
 
       // Filter entities and relations related to the user
       const userEntities = graph.entities.filter(e =>
@@ -100,22 +108,28 @@ class MemoryService {
   }
 
   /**
-   * Create entities in memory
+   * Create entities in memory using MCP tools
    * @param {Array} entities - Array of entity objects
    */
   async createEntities(entities) {
-    if (!this.isInitialized) {
-      throw new Error('Memory service not initialized');
+    if (!this.isConnected || !this.client) {
+      throw new Error('Memory service not connected');
     }
 
     try {
-      const graph = await this.loadGraph();
-      const newEntities = entities.filter(e =>
-        !graph.entities.some(existingEntity => existingEntity.name === e.name)
+      await this.client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_entities',
+            arguments: {
+              entities: entities
+            }
+          }
+        },
+        undefined
       );
-      graph.entities.push(...newEntities);
-      await this.saveGraph(graph);
-      return newEntities;
+      return entities; // MCP server handles filtering duplicates
     } catch (error) {
       console.error('Error creating entities:', error);
       throw error;
@@ -123,26 +137,28 @@ class MemoryService {
   }
 
   /**
-   * Create relations between entities
+   * Create relations between entities using MCP tools
    * @param {Array} relations - Array of relation objects
    */
   async createRelations(relations) {
-    if (!this.isInitialized) {
-      throw new Error('Memory service not initialized');
+    if (!this.isConnected || !this.client) {
+      throw new Error('Memory service not connected');
     }
 
     try {
-      const graph = await this.loadGraph();
-      const newRelations = relations.filter(r =>
-        !graph.relations.some(existingRelation =>
-          existingRelation.from === r.from &&
-          existingRelation.to === r.to &&
-          existingRelation.relationType === r.relationType
-        )
+      await this.client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_relations',
+            arguments: {
+              relations: relations
+            }
+          }
+        },
+        undefined
       );
-      graph.relations.push(...newRelations);
-      await this.saveGraph(graph);
-      return newRelations;
+      return relations; // MCP server handles filtering duplicates
     } catch (error) {
       console.error('Error creating relations:', error);
       throw error;
@@ -150,29 +166,28 @@ class MemoryService {
   }
 
   /**
-   * Add observations to entities
+   * Add observations to entities using MCP tools
    * @param {Array} observations - Array of observation objects
    */
   async addObservations(observations) {
-    if (!this.isInitialized) {
-      throw new Error('Memory service not initialized');
+    if (!this.isConnected || !this.client) {
+      throw new Error('Memory service not connected');
     }
 
     try {
-      const graph = await this.loadGraph();
-      const results = observations.map(o => {
-        const entity = graph.entities.find(e => e.name === o.entityName);
-        if (!entity) {
-          throw new Error(`Entity with name ${o.entityName} not found`);
-        }
-        const newObservations = o.contents.filter(content =>
-          !entity.observations.includes(content)
-        );
-        entity.observations.push(...newObservations);
-        return { entityName: o.entityName, addedObservations: newObservations };
-      });
-      await this.saveGraph(graph);
-      return results;
+      const result = await this.client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_observations',
+            arguments: {
+              observations: observations
+            }
+          }
+        },
+        undefined
+      );
+      return result.content ? JSON.parse(result.content[0].text) : [];
     } catch (error) {
       console.error('Error adding observations:', error);
       throw error;

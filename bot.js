@@ -196,9 +196,9 @@ twitchClient.connect()
 webInterface.start();
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
-  memoryService.stopMemoryServer();
+  await memoryService.stopMemoryServer();
   eventHandler.cleanup();
   autoMessageHandler.cleanup();
   process.exit(0);
