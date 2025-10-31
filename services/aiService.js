@@ -372,6 +372,128 @@ Follow these steps for each interaction:
   }
 
   /**
+   * Generate an image using DALL-E 3
+   * @param {string} prompt - Image generation prompt
+   * @returns {Promise<Object>} - Image generation result
+   */
+  async generateImageDalle(prompt) {
+    try {
+      const response = await this.openai.images.generate({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: getSetting('imageSize', '1024x1024'),
+        quality: 'standard',
+        response_format: 'url'
+      });
+
+      return {
+        success: true,
+        url: response.data[0].url
+      };
+    } catch (error) {
+      console.error('DALL-E image generation error:', error);
+
+      let errorType = 'general';
+      const errorCode = error.code || error.response?.data?.error?.code;
+      if (errorCode) {
+        errorType = errorCode;
+      }
+
+      return {
+        success: false,
+        error: errorType,
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Generate an image using GPT Image 1
+   * @param {string} prompt - Image generation prompt
+   * @returns {Promise<Object>} - Image generation result
+   */
+  async generateImageGPTImage1(prompt) {
+    try {
+      // Parse URLs from prompt
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const urls = prompt.match(urlRegex) || [];
+      const cleanPrompt = prompt.replace(urlRegex, '').trim();
+
+      // Prevent generation with empty prompt and no URLs
+      if (!cleanPrompt && urls.length === 0) {
+        return { success: false, error: 'general', message: 'Empty prompt' };
+      }
+
+      // For GPT Image 1, use Image API similar to DALL-E but with different model
+      if (urls.length > 0) {
+        // Download images from URLs securely and create file objects
+        const imageFiles = [];
+        for (const url of urls) {
+          try {
+            const buffer = await this.downloadImageSecurely(url);
+            // Create a file object using OpenAI's toFile helper
+            const file = await toFile(buffer, `image_${Date.now()}.png`, {
+              type: 'image/png'
+            });
+            imageFiles.push(file);
+          } catch (downloadError) {
+            console.error(`Failed to download image from ${url}:`, downloadError.message);
+            // Skip this URL and continue with others
+          }
+        }
+
+        if (imageFiles.length === 0) {
+          return { success: false, error: 'general', message: 'Failed to download any reference images' };
+        }
+
+        // Use edit endpoint for images with references
+        const response = await this.openai.images.edit({
+          model: 'gpt-image-1-mini',
+          image: imageFiles,
+          prompt: cleanPrompt,
+          n: 1,
+          size: getSetting('imageSize', '1024x1024'),
+          quality: getSetting('imageQuality', 'medium')
+        });
+
+        return {
+          success: true,
+          data: response.data[0].b64_json
+        };
+      } else {
+        // Use generate endpoint for text-only prompts
+        const response = await this.openai.images.generate({
+          model: 'gpt-image-1-mini',
+          prompt: cleanPrompt,
+          n: 1,
+          size: getSetting('imageSize', '1024x1024'),
+          quality: getSetting('imageQuality', 'medium')
+        });
+
+        return {
+          success: true,
+          data: response.data[0].b64_json
+        };
+      }
+    } catch (error) {
+      console.error('GPT Image 1 generation error:', error);
+
+      let errorType = 'general';
+      const errorCode = error.code || error.response?.data?.error?.code;
+      if (errorCode) {
+        errorType = errorCode;
+      }
+
+      return {
+        success: false,
+        error: errorType,
+        message: error.message
+      };
+    }
+  }
+
+  /**
    * Extract and update memory from user's message only
    * @param {string} userMessage - User's message
    * @param {string} botResponse - Bot's response (not used for extraction)
