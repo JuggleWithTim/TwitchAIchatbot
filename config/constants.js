@@ -25,6 +25,7 @@ const COMMANDS = {
   CREATE: '!create',
   IMAGE: '!image',
   AI_RESET_QUOTA: '!airesetquota',
+  AI_PASSIVE_LEARNING: '!aipassive',
   AI_HELP: '!aihelp'
 };
 
@@ -65,6 +66,7 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableSubsAlerts",
   "enableRaidsAlerts",
   "enableMemory",
+  "enablePassiveLearning",
   "DEFAULT_ADDITIONAL_PROMPT",
   "enableDiscordBot",
   "discordBotToken",
@@ -88,6 +90,7 @@ const FIELD_LABELS = {
   enableSubsAlerts: "Subscriptions alerts",
   enableRaidsAlerts: "Raids alerts",
   enableMemory: "Persistent memory",
+  enablePassiveLearning: "Passive learning",
   DEFAULT_ADDITIONAL_PROMPT: "System prompt",
   enableDiscordBot: "Enable Discord Bot",
   discordBotToken: "Discord Bot Token",
@@ -106,6 +109,7 @@ const CHECKBOX_FIELDS = [
   "enableSubsAlerts",
   "enableRaidsAlerts",
   "enableMemory",
+  "enablePassiveLearning",
   "enableDiscordBot"
 ];
 

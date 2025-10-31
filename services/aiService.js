@@ -404,6 +404,101 @@ Follow these steps for each interaction:
   }
 
   /**
+   * Extract memory from any user message (passive learning)
+   * @param {string} userMessage - User's message
+   * @param {string} userId - User identifier
+   */
+  async extractMemoryFromMessage(userMessage, userId = 'default_user') {
+    const memoryEnabled = getSetting('enableMemory') == 1;
+    const passiveLearningEnabled = getSetting('enablePassiveLearning') == 1;
+
+    // Only extract if both memory and passive learning are enabled
+    if (!memoryEnabled || !passiveLearningEnabled) {
+      return;
+    }
+
+    this.ensureOpenAIInitialized();
+    if (!this.openai) {
+      console.warn('OpenAI not initialized, skipping passive memory extraction');
+      return;
+    }
+
+    try {
+      // Use AI to extract memory-worthy information from the user's message
+      const extractionPrompt = `Analyze what this user said and extract any new information that falls into these categories:
+- Basic Identity (age, gender, location, job title, education level, etc.)
+- Behaviors (interests, habits, etc.)
+- Preferences (communication style, preferred language, etc.)
+- Goals (goals, targets, aspirations, etc.)
+- Relationships (personal and professional relationships up to 3 degrees of separation)
+
+IMPORTANT: Only extract information that the user actually provided about themselves or others. Do NOT extract information that appears to be what the bot knows or is telling the user.
+
+Format your response as a JSON object with these possible keys:
+{
+  "identity": ["fact1", "fact2"],
+  "behaviors": ["behavior1", "behavior2"],
+  "preferences": ["preference1", "preference2"],
+  "goals": ["goal1", "goal2"],
+  "relationships": [
+    {
+      "entity": "entity_name",
+      "entityType": "person|organization|event",
+      "relationType": "works_at|friends_with|family_of|etc",
+      "observations": ["fact about entity"]
+    }
+  ]
+}
+
+Only include categories that have new information from the user's message. If no new information, return empty object {}.
+
+User's message: ${userMessage}`;
+
+      const extractionResponse = await this.openai.chat.completions.create({
+        model: getSetting('openaiModelName', 'gpt-4o-mini'),
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: extractionPrompt
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.3
+      });
+
+      const extractedText = cleanResponse(extractionResponse.choices[0].message.content);
+
+      // Parse the JSON response
+      let newInfo;
+      try {
+        // Clean up the response to ensure it's valid JSON
+        const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          newInfo = JSON.parse(jsonMatch[0]);
+        } else {
+          newInfo = JSON.parse(extractedText);
+        }
+      } catch (parseError) {
+        console.error('Failed to parse passive memory extraction response:', extractedText);
+        return;
+      }
+
+      // Only update if there's actual new information
+      if (Object.keys(newInfo).length > 0) {
+        console.log('Passive learning: Updating memory with new information:', newInfo);
+        await memoryService.updateMemory(userId, newInfo);
+      }
+
+    } catch (error) {
+      console.error('Error in passive memory extraction:', error);
+    }
+  }
+
+  /**
    * Extract and update memory from user's message only
    * @param {string} userMessage - User's message
    * @param {string} botResponse - Bot's response (not used for extraction)

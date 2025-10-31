@@ -100,6 +100,14 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   // Add message to bot state
   botState.addMessage(`${tags.username}: ${message}`);
 
+  // Passive learning: Extract memory from all messages if enabled
+  if (getSetting('enableMemory') == 1 && getSetting('enablePassiveLearning') == 1) {
+    // Run passive memory extraction in background (don't await to avoid blocking)
+    aiService.extractMemoryFromMessage(message, tags.username).catch(error => {
+      console.error('Passive learning error:', error);
+    });
+  }
+
   // Try to handle as command first
   const commandHandled = await commandHandler.handleCommand(channel, tags, message);
   if (commandHandled) return;
