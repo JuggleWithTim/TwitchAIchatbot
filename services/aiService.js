@@ -3,6 +3,7 @@ const { OpenAI } = require('openai');
 const { toFile } = require('openai');
 const { getSetting } = require('../config/settings');
 const { cleanResponse } = require('../utils/helpers');
+const memoryService = require('./memoryService');
 
 // Security constants for image downloads
 const IMAGE_DOWNLOAD_CONFIG = {
@@ -124,18 +125,85 @@ class AIService {
   }
 
   /**
-   * Get chat response from AI (OpenAI or Ollama)
+   * Get chat response from AI (OpenAI or Ollama) with optional memory integration
    * @param {string} userMessage - The user's message
    * @param {string} context - Chat context
    * @param {string} prompt - System prompt
-   * @returns {Promise<string>} - AI response
+   * @param {string} userId - User identifier for memory
+   * @returns {Promise<Object>} - AI response with memory info
    */
-  async getChatResponse(userMessage, context, prompt) {
-    if (getSetting('useOpenAI')) {
-      return this.getOpenAIResponse(userMessage, context, prompt);
-    } else {
-      return this.getOllamaResponse(userMessage, context, prompt);
+  async getChatResponse(userMessage, context, prompt, userId = 'default_user') {
+    const memoryEnabled = getSetting('enableMemory') == 1;
+
+    let memoryContext = '';
+    let finalPrompt = prompt;
+
+    if (memoryEnabled) {
+      // Step 1: Memory Retrieval - Always start by retrieving memory
+      try {
+        const memoryData = await memoryService.retrieveMemory(userId);
+        if (memoryData && memoryData.entities && memoryData.entities.length > 0) {
+          // Format memory data for the AI
+          const formattedMemory = {
+            entities: memoryData.entities,
+            relations: memoryData.relations
+          };
+          memoryContext = `\n\nMemory Context:\n${JSON.stringify(formattedMemory, null, 2)}`;
+        }
+      } catch (error) {
+        console.error('Error retrieving memory:', error);
+      }
+
+      // Create enhanced prompt with memory instructions
+      finalPrompt = `${prompt}
+
+MEMORY INSTRUCTIONS:
+Follow these steps for each interaction:
+
+1. User Identification:
+   - You are interacting with ${userId}
+   - If you have not identified ${userId}, proactively try to do so.
+
+2. Memory Retrieval:
+   - You have access to the knowledge graph below as your memory
+   - Use this information to personalize your responses
+
+3. Memory Categories:
+   - While conversing, be attentive to new information in these categories:
+     a) Basic Identity (age, gender, location, job title, education level, etc.)
+     b) Behaviors (interests, habits, etc.)
+     c) Preferences (communication style, preferred language, etc.)
+     d) Goals (goals, targets, aspirations, etc.)
+     e) Relationships (personal and professional relationships up to 3 degrees of separation)
+
+4. Memory Update:
+   - If any new information was gathered, it will be stored in your memory for future interactions.
+   - Create entities for recurring organizations, people, and significant events
+   - Connect them using appropriate relations
+   - Store facts as observations
+   ${memoryContext}`;
     }
+
+    let response;
+    if (getSetting('useOpenAI')) {
+      response = await this.getOpenAIResponse(userMessage, context, finalPrompt);
+    } else {
+      response = await this.getOllamaResponse(userMessage, context, finalPrompt);
+    }
+
+    // Step 3: Memory Update - Extract and store new information (only if memory is enabled)
+    if (memoryEnabled) {
+      try {
+        await this.updateMemoryFromResponse(userMessage, response, userId);
+      } catch (error) {
+        console.error('Error updating memory:', error);
+      }
+    }
+
+    return {
+      response: response,
+      memoryRetrieved: !!memoryContext
+    };
   }
 
   /**
@@ -332,6 +400,93 @@ class AIService {
         error: errorType,
         message: error.message
       };
+    }
+  }
+
+  /**
+   * Extract and update memory from conversation
+   * @param {string} userMessage - User's message
+   * @param {string} botResponse - Bot's response
+   * @param {string} userId - User identifier
+   */
+  async updateMemoryFromResponse(userMessage, botResponse, userId = 'default_user') {
+    this.ensureOpenAIInitialized();
+    if (!this.openai) {
+      console.warn('OpenAI not initialized, skipping memory update');
+      return;
+    }
+
+    try {
+      // Use AI to extract memory-worthy information from the conversation
+      const extractionPrompt = `Analyze this conversation and extract any new information that falls into these categories:
+- Basic Identity (age, gender, location, job title, education level, etc.)
+- Behaviors (interests, habits, etc.)
+- Preferences (communication style, preferred language, etc.)
+- Goals (goals, targets, aspirations, etc.)
+- Relationships (personal and professional relationships up to 3 degrees of separation)
+
+Format your response as a JSON object with these possible keys:
+{
+  "identity": ["fact1", "fact2"],
+  "behaviors": ["behavior1", "behavior2"],
+  "preferences": ["preference1", "preference2"],
+  "goals": ["goal1", "goal2"],
+  "relationships": [
+    {
+      "entity": "entity_name",
+      "entityType": "person|organization|event",
+      "relationType": "works_at|friends_with|family_of|etc",
+      "observations": ["fact about entity"]
+    }
+  ]
+}
+
+Only include categories that have new information. If no new information, return empty object {}.
+
+User: ${userMessage}
+Bot: ${botResponse}`;
+
+      const extractionResponse = await this.openai.chat.completions.create({
+        model: getSetting('openaiModelName', 'gpt-4o-mini'),
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: extractionPrompt
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.3
+      });
+
+      const extractedText = cleanResponse(extractionResponse.choices[0].message.content);
+
+      // Parse the JSON response
+      let newInfo;
+      try {
+        // Clean up the response to ensure it's valid JSON
+        const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          newInfo = JSON.parse(jsonMatch[0]);
+        } else {
+          newInfo = JSON.parse(extractedText);
+        }
+      } catch (parseError) {
+        console.error('Failed to parse memory extraction response:', extractedText);
+        return;
+      }
+
+      // Only update if there's actual new information
+      if (Object.keys(newInfo).length > 0) {
+        console.log('Updating memory with new information:', newInfo);
+        await memoryService.updateMemory(userId, newInfo);
+      }
+
+    } catch (error) {
+      console.error('Error updating memory from response:', error);
     }
   }
 

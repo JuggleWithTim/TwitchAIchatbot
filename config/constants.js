@@ -64,6 +64,7 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableBitsAlerts",
   "enableSubsAlerts",
   "enableRaidsAlerts",
+  "enableMemory",
   "DEFAULT_ADDITIONAL_PROMPT",
   "enableDiscordBot",
   "discordBotToken",
@@ -86,6 +87,7 @@ const FIELD_LABELS = {
   enableBitsAlerts: "Bits alerts",
   enableSubsAlerts: "Subscriptions alerts",
   enableRaidsAlerts: "Raids alerts",
+  enableMemory: "Persistent memory",
   DEFAULT_ADDITIONAL_PROMPT: "System prompt",
   enableDiscordBot: "Enable Discord Bot",
   discordBotToken: "Discord Bot Token",
@@ -103,6 +105,7 @@ const CHECKBOX_FIELDS = [
   "enableBitsAlerts",
   "enableSubsAlerts",
   "enableRaidsAlerts",
+  "enableMemory",
   "enableDiscordBot"
 ];
 

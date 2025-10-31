@@ -6,6 +6,7 @@ const { OpenAI } = require('openai');
 const { loadSettings, getSetting, getSettings } = require('./config/settings');
 const { MESSAGES } = require('./config/constants');
 const aiService = require('./services/aiService');
+const memoryService = require('./services/memoryService');
 const CommandHandler = require('./handlers/commandHandler');
 const EventHandler = require('./handlers/eventHandler');
 const AutoMessageHandler = require('./handlers/autoMessageHandler');
@@ -41,6 +42,12 @@ async function initializeBot() {
       },
       channels: [getSetting('channel')],
     });
+
+    // Initialize memory service (only if enabled)
+    if (getSetting('enableMemory') == 1) {
+      console.log('Initializing memory service...');
+      await memoryService.initialize();
+    }
 
     // Initialize bot state (must be after settings are loaded)
     const botState = new BotState();
@@ -123,8 +130,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
 
     try {
-      let response = await aiService.getChatResponse(userMessage, context, prompt);
-      response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+      const result = await aiService.getChatResponse(userMessage, context, prompt, tags.username);
+      let response = result.response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
 
       if (!response) {
         response = getSetting('fallbackMessage', 'Ooooops, something went wrong');
@@ -191,6 +198,7 @@ webInterface.start();
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('Shutting down gracefully...');
+  memoryService.stopMemoryServer();
   eventHandler.cleanup();
   autoMessageHandler.cleanup();
   process.exit(0);
