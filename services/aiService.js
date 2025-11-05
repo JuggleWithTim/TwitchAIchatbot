@@ -500,6 +500,11 @@ Follow these steps for each interaction:
    * @param {string} userId - User identifier
    */
   async updateMemoryFromResponse(userMessage, botResponse, userId = 'default_user') {
+    // Skip memory extraction for default_user (used for commands/events/internal prompts)
+    if (userId === 'default_user') {
+      return;
+    }
+
     try {
       // Build the extraction prompt
       const extractionPrompt = `Analyze what this user said and extract any new information that falls into these categories:
@@ -509,7 +514,12 @@ Follow these steps for each interaction:
 - Goals (goals, targets, aspirations, etc.)
 - Relationships (personal and professional relationships up to 3 degrees of separation)
 
-IMPORTANT: Only extract information that the user actually provided about themselves or others. Do NOT extract information that appears to be what the bot knows or is telling the user.
+CRITICAL EXTRACTION RULES:
+1. ONLY extract information that the user provides about THEMSELVES. Do NOT extract names, usernames, or handles that the user uses to address or greet OTHER people.
+2. If the user mentions someone else's name/username/handle, put that information in the "relationships" section to create a separate entity, NOT in the user's identity.
+3. Do NOT treat greeting phrases like "Hey timmmmy" or "What's up Tunney" as information about the user's own identity - these are addresses to others.
+4. Only self-descriptive statements like "I'm 25 years old" or "I live in Seattle" should go in identity/behaviors/preferences/goals.
+5. Do NOT extract information that appears to be what the bot knows or is telling the user.
 
 Format your response as a JSON object with these possible keys:
 {
@@ -568,7 +578,12 @@ User's message: ${userMessage}`;
 - Goals (goals, targets, aspirations, etc.)
 - Relationships (personal and professional relationships up to 3 degrees of separation)
 
-IMPORTANT: Only extract information that the user actually provided about themselves or others. Do NOT extract information that appears to be what the bot knows or is telling the user.
+CRITICAL EXTRACTION RULES:
+1. ONLY extract information that the user provides about THEMSELVES. Do NOT extract names, usernames, or handles that the user uses to address or greet OTHER people.
+2. If the user mentions someone else's name/username/handle, put that information in the "relationships" section to create a separate entity, NOT in the user's identity.
+3. Do NOT treat greeting phrases like "Hey timmmmy" or "What's up Tunney" as information about the user's own identity - these are addresses to others.
+4. Only self-descriptive statements like "I'm 25 years old" or "I live in Seattle" should go in identity/behaviors/preferences/goals.
+5. Do NOT extract information that appears to be what the bot knows or is telling the user.
 
 Format your response as a JSON object with these possible keys:
 {
