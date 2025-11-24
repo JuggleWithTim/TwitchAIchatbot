@@ -6,6 +6,7 @@ const { OpenAI } = require('openai');
 const { loadSettings, getSetting, getSettings } = require('./config/settings');
 const { MESSAGES } = require('./config/constants');
 const aiService = require('./services/aiService');
+const memoryService = require('./services/memoryService');
 const CommandHandler = require('./handlers/commandHandler');
 const EventHandler = require('./handlers/eventHandler');
 const AutoMessageHandler = require('./handlers/autoMessageHandler');
@@ -41,6 +42,12 @@ async function initializeBot() {
       },
       channels: [getSetting('channel')],
     });
+
+    // Initialize memory service (only if enabled)
+    if (getSetting('enableMemory') == 1) {
+      console.log('Initializing memory service...');
+      await memoryService.initialize();
+    }
 
     // Initialize bot state (must be after settings are loaded)
     const botState = new BotState();
@@ -101,7 +108,17 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   if (botState.isPaused()) return;
 
   const botUsername = twitchClient.getUsername().toLowerCase();
-  if (message.toLowerCase().includes(botUsername)) {
+  const isBotMention = message.toLowerCase().includes(botUsername);
+
+  // Passive learning: Extract memory from messages that won't trigger bot responses
+  if (getSetting('enableMemory') == 1 && getSetting('enablePassiveLearning') == 1 && !isBotMention) {
+    // Run passive memory extraction in background (don't await to avoid blocking)
+    aiService.extractMemoryFromMessage(message, tags.username).catch(error => {
+      console.error('Passive learning error:', error);
+    });
+  }
+
+  if (isBotMention) {
     // Check if we can respond to this user
     if (!botState.canRespondToUser(tags.username)) {
       return; // Ignore messages from users who have reached the limit
@@ -123,8 +140,8 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
 
     try {
-      let response = await aiService.getChatResponse(userMessage, context, prompt);
-      response = response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
+      const result = await aiService.getChatResponse(userMessage, context, prompt, tags.username);
+      let response = result.response.replace(/<think[^>]*>([\s\S]*?)<\/think>/gi, '').trim();
 
       if (!response) {
         response = getSetting('fallbackMessage', 'Ooooops, something went wrong');
@@ -189,8 +206,9 @@ twitchClient.connect()
 webInterface.start();
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
+  await memoryService.stopMemoryServer();
   eventHandler.cleanup();
   autoMessageHandler.cleanup();
   process.exit(0);

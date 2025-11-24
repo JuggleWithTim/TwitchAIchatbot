@@ -59,14 +59,14 @@ class AutoMessageHandler {
       const context = this.botState.getMessageContext();
 
       // Generate a message based on the context
-      let response = await aiService.getChatResponse(
+      const result = await aiService.getChatResponse(
         'Please respond to the chat as if you are a part of the conversation. Do not include your own name at the start.',
         context,
         this.botState.getSystemPrompt()
       );
 
       // Remove <think> tags (including content) from the response
-      response = cleanResponse(response);
+      let response = cleanResponse(result.response);
 
       // If the response is empty, send a default message
       if (!response) {

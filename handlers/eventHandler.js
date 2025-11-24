@@ -123,13 +123,13 @@ class EventHandler {
     const groupedEventPrompt = `${this.botState.getSystemPrompt()}\nAcknowledge a group of ${totalGifts} gifted subscriptions from these users: ${usernames.join(', ')}. Use a celebratory and grateful tone. Keep the message concise and under 423 characters.`;
 
     try {
-      let response = await aiService.getChatResponse(
+      let result = await aiService.getChatResponse(
         `Grouped subgift event: ${totalGifts} gifts from ${usernames.length} users`,
         this.botState.getMessageContext(),
         groupedEventPrompt
       );
 
-      response = cleanResponse(response);
+      let response = cleanResponse(result.response);
 
       if (!response) {
         response = `A big shoutout to our amazing gifters: ${usernames.join(', ')} for gifting a total of ${totalGifts} subscriptions! 🎁✨`;
@@ -180,14 +180,14 @@ class EventHandler {
   async handleSubscriptionEvent(channel, username, eventPrompt, logMessage, recipient = null) {
     try {
       // Get AI response
-      let response = await aiService.getChatResponse(
+      let result = await aiService.getChatResponse(
         logMessage,
         this.botState.getMessageContext(),
         eventPrompt
       );
 
       // Clean response
-      response = cleanResponse(response);
+      let response = cleanResponse(result.response);
 
       // Fallback responses
       if (!response) {
@@ -224,13 +224,13 @@ class EventHandler {
       excitement. Keep under 423 characters.`;
 
     try {
-      let response = await aiService.getChatResponse(
+      let result = await aiService.getChatResponse(
         `Cheer event: ${bits} bits from ${username}`,
         this.botState.getMessageContext(),
         eventPrompt
       );
 
-      response = cleanResponse(response);
+      let response = cleanResponse(result.response);
       if (!response) response = `${bits} bits?! You're a star! ⭐`;
 
       this.twitchClient.say(channel, `@${username} ${response}`);
@@ -251,13 +251,13 @@ class EventHandler {
       name and viewer count naturally. Keep under 423 characters.`;
 
     try {
-      let response = await aiService.getChatResponse(
+      let result = await aiService.getChatResponse(
         `Raid event: ${viewers} viewers from ${username}`,
         this.botState.getMessageContext(),
         eventPrompt
       );
 
-      response = cleanResponse(response);
+      let response = cleanResponse(result.response);
       if (!response) response = `HOLY MOLY THE ${viewers} RAID TRAIN HAS ARRIVED! CHOO CHOO! 🚂`;
 
       this.twitchClient.say(channel, `@${username} ${response}`);
