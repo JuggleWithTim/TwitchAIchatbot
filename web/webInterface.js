@@ -364,19 +364,22 @@ class WebInterface {
           ${this.renderScheduledMessagesField('scheduledMessages', settings.scheduledMessages || [])}
         </div>
 
-        <div class="field">
-          <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
-          ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
-        </div>
+        <div class="section">
+          <h3 style="color: #b080fa; margin-top: 0;">Discord Bot</h3>
+          <div class="field">
+            <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
+            ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
+          </div>
 
-        <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
-          <h3 style="color: #b080fa; margin-top: 0;">Discord Bot Settings</h3>
-          ${discordFields.map((k) => {
-            const label = FIELD_LABELS[k] || k;
-            const value = settings[k];
-            const field = this.renderInputField(k, value);
-            return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
-          }).join("")}
+          <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
+            <h4 style="color: #b080fa; margin-top: 20px;">Discord Bot Settings</h4>
+            ${discordFields.map((k) => {
+              const label = FIELD_LABELS[k] || k;
+              const value = settings[k];
+              const field = this.renderInputField(k, value);
+              return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
+            }).join("")}
+          </div>
         </div>
 
         <div class="save-section">
