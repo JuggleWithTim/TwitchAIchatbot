@@ -72,7 +72,8 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableDiscordBot",
   "discordBotToken",
   "discordChannels",
-  "discordSystemPrompt"
+  "discordSystemPrompt",
+  "customCommands"
 ];
 
 const FIELD_LABELS = {
@@ -96,7 +97,8 @@ const FIELD_LABELS = {
   enableDiscordBot: "Enable Discord Bot",
   discordBotToken: "Discord Bot Token",
   discordChannels: "Discord Channel IDs or Names (comma separated)",
-  discordSystemPrompt: "Discord Bot System Prompt"
+  discordSystemPrompt: "Discord Bot System Prompt",
+  customCommands: "Custom Commands"
 };
 
 const CHECKBOX_FIELDS = [

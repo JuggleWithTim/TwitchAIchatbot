@@ -1,6 +1,6 @@
 const aiService = require('../services/aiService');
 const twitchApiService = require('../services/twitchApiService');
-const { getSetting, setSetting, saveSettings } = require('../config/settings');
+const { getSetting, setSetting, saveSettings, getSettings } = require('../config/settings');
 const { COMMANDS, MESSAGES, IMAGE_COMMAND_ALIASES } = require('../config/constants');
 const {
   hasElevatedPrivileges,
@@ -22,6 +22,41 @@ class CommandHandler {
   }
 
   /**
+   * Handle custom commands (checked before hardcoded ones)
+   * @param {string} channel - Channel name
+   * @param {string} message - Full message
+   * @returns {boolean} - True if custom command was handled
+   */
+  async handleCustomCommand(channel, message) {
+    const customCommands = getSettings().customCommands || [];
+    const cmd = customCommands.find(c => message.toLowerCase().startsWith(c.command.toLowerCase()));
+
+    if (!cmd) return false;
+
+    if (cmd.type === 'static') {
+      // Static command - send response directly
+      this.twitchClient.say(channel, cmd.content);
+      this.botState.addMessage(`${getSetting('username')}: ${cmd.content}`);
+    } else if (cmd.type === 'ai') {
+      // AI command - use AI service with prompt
+      const context = this.botState.getMessageContext();
+      try {
+        const result = await aiService.getChatResponse(cmd.content, context, this.botState.getSystemPrompt());
+        let response = result.response;
+        this.twitchClient.say(channel, response);
+        this.botState.addMessage(`${getSetting('username')}: ${response}`);
+      } catch (error) {
+        console.error('Custom AI command error:', error);
+        const fallback = getSetting('fallbackMessage', 'Ooooops, something went wrong');
+        this.twitchClient.say(channel, fallback);
+        this.botState.addMessage(`${getSetting('username')}: ${fallback}`);
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Handle incoming commands
    * @param {string} channel - Channel name
    * @param {Object} tags - Message tags
@@ -30,6 +65,11 @@ class CommandHandler {
    */
   async handleCommand(channel, tags, message) {
     const username = tags.username;
+
+    // Check custom commands first
+    if (await this.handleCustomCommand(channel, message)) {
+      return true;
+    }
 
     // AI Bot promo
     if (message.toLowerCase() === COMMANDS.AI_BOT) {

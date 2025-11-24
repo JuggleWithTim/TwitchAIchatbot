@@ -49,8 +49,50 @@ class WebInterface {
     this.app.post('/', async (req, res) => {
       await loadSettings();
 
+      const action = req.body.action || "save";
+
+      // Handle custom command actions first
+      if (action === "addCommand") {
+        const newCommand = req.body.newCommand;
+        const newType = req.body.newType;
+        const newContent = req.body.newContent;
+
+        if (newCommand && newType && newContent) {
+          const customCommands = getSettings().customCommands || [];
+          // Check if command already exists
+          const exists = customCommands.find(cmd => cmd.command.toLowerCase() === newCommand.toLowerCase());
+          if (!exists) {
+            customCommands.push({
+              command: newCommand.toLowerCase(),
+              type: newType,
+              content: newContent
+            });
+            setSetting('customCommands', customCommands);
+            await saveSettings();
+          }
+        }
+        return res.redirect('/');
+      }
+
+      // Also check for delete action by button name
+      if (req.body.deleteCommandIndex !== undefined) {
+        const deleteIndex = parseInt(req.body.deleteCommandIndex);
+        if (!isNaN(deleteIndex)) {
+          const customCommands = getSettings().customCommands || [];
+          if (deleteIndex >= 0 && deleteIndex < customCommands.length) {
+            customCommands.splice(deleteIndex, 1);
+            setSetting('customCommands', customCommands);
+            await saveSettings();
+          }
+        }
+        return res.redirect('/');
+      }
+
       // Update settings from form data
       for (const k of SETTINGS_EDITABLE_FIELDS) {
+        // Skip customCommands as it's handled separately by dedicated actions
+        if (k === 'customCommands') continue;
+
         let v;
         if (CHECKBOX_FIELDS.includes(k)) {
           v = req.body[k] === "1" ? 1 : 0;
@@ -71,7 +113,6 @@ class WebInterface {
 
       await saveSettings();
 
-      const action = req.body.action || "save";
       if (action === "restart") {
         res.send(MESSAGES.RESTARTING);
         setTimeout(() => {
@@ -114,6 +155,9 @@ class WebInterface {
     if (key === "discordSystemPrompt") {
       return `<textarea id="${key}" name="${key}" rows="10" cols="60">${value || ''}</textarea>`;
     }
+    if (key === "customCommands") {
+      return this.renderCustomCommandsField(key, value || []);
+    }
     if (typeof value === "number") {
       return `<input type="number" id="${key}" name="${key}" value="${value}" />`;
     }
@@ -125,6 +169,43 @@ class WebInterface {
         style="width: 92%; padding: 7px; border-radius: 5px; border: 1px solid #8070c7; font-size: 1em; background: #202025; color: #fafaff;" />`;
     }
     return `<input type="text" id="${key}" name="${key}" value="${value === undefined ? '' : value}" />`;
+  }
+
+  /**
+   * Render custom commands management field
+   */
+  renderCustomCommandsField(key, commands) {
+    let html = '<div class="custom-commands-section" style="border: 1px solid #8070c7; padding: 15px; border-radius: 5px; background: #202025;">';
+
+    // Add form to create new command
+    html += '<div style="margin-bottom: 20px; padding: 10px; background: #35363a; border-radius: 5px;">';
+    html += '<h4 style="color: #b080fa; margin-top: 0;">Add New Command</h4>';
+    html += '<input type="text" name="newCommand" placeholder="!commandname" style="width: 200px; margin-right: 10px;">';
+    html += '<select name="newType" style="margin-right: 10px;"><option value="static">Static Response</option><option value="ai">AI Generated</option></select>';
+    html += '<textarea name="newContent" placeholder="Command content..." rows="3" style="width: 92%; margin-top: 5px;"></textarea>';
+    html += '<button type="submit" name="action" value="addCommand" style="margin-top: 8px; background: #4CAF50;">Add Command</button>';
+    html += '</div>';
+
+    // List existing commands
+    if (commands.length > 0) {
+      html += '<div class="existing-commands">';
+      html += '<h4 style="color: #b080fa;">Existing Commands</h4>';
+
+      commands.forEach((cmd, index) => {
+        html += `<div class="command-item" style="border: 1px solid #555; padding: 10px; margin-bottom: 10px; border-radius: 5px;">`;
+        html += `<strong>${cmd.command}</strong> (${cmd.type})`;
+        html += `<p style="margin: 5px 0;">${cmd.content}</p>`;
+        html += `<button type="submit" name="deleteCommandIndex" value="${index}" style="background: #e74c3c; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Delete</button>`;
+        html += `</div>`;
+      });
+
+      html += '</div>';
+    } else {
+      html += '<p>No custom commands defined yet.</p>';
+    }
+
+    html += '</div>';
+    return html;
   }
 
   /**
@@ -155,8 +236,9 @@ class WebInterface {
           textarea { min-height: 80px; }
           button { background: #b080fa; color: #fff; font-weight: bold; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 1.05em; }
           button:hover { background: #8253d8;}
-          .discord-settings { margin-left: 20px; margin-top: 10px; padding-left: 15px; border-left: 2px solid #8070c7; transition: all 0.3s ease; }
+          .discord-settings { margin-top: 15px; padding: 15px; background: #2a2b2e; border-radius: 5px; border: 1px solid #555; }
           .discord-settings.collapsed { display: none; }
+          .custom-commands-section { margin-top: 15px; }
         </style>
         <script>
           function toggleDiscordSettings() {
@@ -195,6 +277,7 @@ class WebInterface {
         </div>
 
         <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
+          <h3 style="color: #b080fa; margin-top: 0;">Discord Bot Settings</h3>
           ${discordFields.map((k) => {
             const label = FIELD_LABELS[k] || k;
             const value = settings[k];
@@ -203,10 +286,12 @@ class WebInterface {
           }).join("")}
         </div>
 
-        <button type="submit" name="action" value="save">Save</button>
-        <button type="submit" name="action" value="restart" style="background:#e74c3c;margin-left:16px;" onclick="return confirm('Are you sure you want to restart the bot?');">
-          Restart Bot
-        </button>
+        <div style="text-align: center; margin-top: 24px; border-top: 1px solid #8070c7; padding-top: 16px;">
+          <button type="submit" name="action" value="save" style="background: #4CAF50;">Save</button>
+          <button type="submit" name="action" value="restart" style="background:#e74c3c;margin-left:16px;" onclick="return confirm('Are you sure you want to restart the bot?');">
+            Restart Bot
+          </button>
+        </div>
       </form>
       </body>
     </html>
