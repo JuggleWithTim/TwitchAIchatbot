@@ -287,10 +287,11 @@ class WebInterface {
   renderSettingsPage() {
     const settings = getSettings();
 
-    // Separate Discord and scheduled messages fields from other fields
+    // Separate Discord, scheduled messages, and custom commands fields from other fields
     const discordFields = ['discordBotToken', 'discordChannels', 'discordSystemPrompt'];
     const scheduledFields = ['enableScheduledMessages', 'scheduledMessageTimer', 'scheduledMessages'];
-    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && k !== 'enableDiscordBot');
+    const customCommandFields = ['customCommands'];
+    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && !customCommandFields.includes(k) && k !== 'enableDiscordBot');
 
     return `
     <!DOCTYPE html>
@@ -349,6 +350,11 @@ class WebInterface {
             const field = this.renderInputField(k, value);
             return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
           }).join("")}
+        </div>
+
+        <div class="section">
+          <h3 style="color: #b080fa; margin-top: 0;">Custom Commands</h3>
+          ${this.renderCustomCommandsField('customCommands', settings.customCommands || [])}
         </div>
 
         <div class="section">
