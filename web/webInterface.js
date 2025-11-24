@@ -133,6 +133,10 @@ class WebInterface {
   renderSettingsPage() {
     const settings = getSettings();
 
+    // Separate Discord fields from other fields
+    const discordFields = ['discordBotToken', 'discordChannels', 'discordSystemPrompt'];
+    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && k !== 'enableDiscordBot');
+
     return `
     <!DOCTYPE html>
     <html>
@@ -151,17 +155,54 @@ class WebInterface {
           textarea { min-height: 80px; }
           button { background: #b080fa; color: #fff; font-weight: bold; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 1.05em; }
           button:hover { background: #8253d8;}
+          .discord-settings { margin-left: 20px; margin-top: 10px; padding-left: 15px; border-left: 2px solid #8070c7; transition: all 0.3s ease; }
+          .discord-settings.collapsed { display: none; }
         </style>
+        <script>
+          function toggleDiscordSettings() {
+            const checkbox = document.getElementById('enableDiscordBot');
+            const discordSection = document.getElementById('discord-settings');
+            if (checkbox.checked) {
+              discordSection.classList.remove('collapsed');
+            } else {
+              discordSection.classList.add('collapsed');
+            }
+          }
+
+          function initDiscordToggle() {
+            const checkbox = document.getElementById('enableDiscordBot');
+            checkbox.addEventListener('change', toggleDiscordSettings);
+            // Set initial state
+            toggleDiscordSettings();
+          }
+
+          document.addEventListener('DOMContentLoaded', initDiscordToggle);
+        </script>
       </head>
       <body>
       <h2>Twitch AI Bot Settings</h2>
       <form method="POST" action="/">
-        ${SETTINGS_EDITABLE_FIELDS.map((k) => {
+        ${regularFields.map((k) => {
           const label = FIELD_LABELS[k] || k;
           const value = settings[k];
           const field = this.renderInputField(k, value);
           return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
         }).join("")}
+
+        <div class="field">
+          <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
+          ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
+        </div>
+
+        <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
+          ${discordFields.map((k) => {
+            const label = FIELD_LABELS[k] || k;
+            const value = settings[k];
+            const field = this.renderInputField(k, value);
+            return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
+          }).join("")}
+        </div>
+
         <button type="submit" name="action" value="save">Save</button>
         <button type="submit" name="action" value="restart" style="background:#e74c3c;margin-left:16px;" onclick="return confirm('Are you sure you want to restart the bot?');">
           Restart Bot
