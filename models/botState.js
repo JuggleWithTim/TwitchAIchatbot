@@ -11,6 +11,7 @@ class BotState {
     this.userResponseCounts = new Map();
     this.userResponseResetTimer = null;
     this.lastBotMentionTime = getTimestamp();
+    this.lastScheduledMessageTime = 0;
     this.botPaused = false;
     this.systemPrompt = '';
     this.initializeState();

@@ -68,12 +68,15 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableRaidsAlerts",
   "enableMemory",
   "enablePassiveLearning",
+  "enableScheduledMessages",
+  "scheduledMessageTimer",
   "DEFAULT_ADDITIONAL_PROMPT",
   "enableDiscordBot",
   "discordBotToken",
   "discordChannels",
   "discordSystemPrompt",
-  "customCommands"
+  "customCommands",
+  "scheduledMessages"
 ];
 
 const FIELD_LABELS = {
@@ -93,12 +96,15 @@ const FIELD_LABELS = {
   enableRaidsAlerts: "Raids alerts",
   enableMemory: "Persistent memory",
   enablePassiveLearning: "Passive learning",
+  enableScheduledMessages: "Scheduled messages",
+  scheduledMessageTimer: "Scheduled message timer",
   DEFAULT_ADDITIONAL_PROMPT: "System prompt",
   enableDiscordBot: "Enable Discord Bot",
   discordBotToken: "Discord Bot Token",
   discordChannels: "Discord Channel IDs or Names (comma separated)",
   discordSystemPrompt: "Discord Bot System Prompt",
-  customCommands: "Custom Commands"
+  customCommands: "Custom Commands",
+  scheduledMessages: "Scheduled Messages"
 };
 
 const CHECKBOX_FIELDS = [
@@ -113,6 +119,7 @@ const CHECKBOX_FIELDS = [
   "enableRaidsAlerts",
   "enableMemory",
   "enablePassiveLearning",
+  "enableScheduledMessages",
   "enableDiscordBot"
 ];
 
