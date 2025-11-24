@@ -300,7 +300,10 @@ class WebInterface {
         <title>Twitch AI Bot Settings</title>
         <style>
           body { font-family: 'Segoe UI', Arial, sans-serif; background: #262729; color: #f2f2f2; padding:40px; }
-          h2 { color: #b080fa; }
+          h2 {
+            color: #b080fa;
+            text-align: center;
+          }
           .sections-grid {
             column-count: 2;
             column-gap: 20px;
