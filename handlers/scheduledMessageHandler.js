@@ -63,6 +63,18 @@ class ScheduledMessageHandler {
 
     if (scheduledMessages.length === 0) return;
 
+    // Check if the most recent message was sent by the bot
+    if (this.botState.messageHistory.length > 0) {
+      const mostRecentMessage = this.botState.messageHistory[this.botState.messageHistory.length - 1];
+      const botUsername = getSetting('username').toLowerCase();
+      if (mostRecentMessage && mostRecentMessage.toLowerCase().startsWith(`${botUsername}:`)) {
+        // Skip sending this message and advance to the next one
+        console.log('Last message sent by the bot, skipping scheduled message.');
+        this.advanceToNextMessage();
+        return;
+      }
+    }
+
     const messageData = scheduledMessages[this.currentMessageIndex];
 
     try {
