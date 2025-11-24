@@ -301,7 +301,25 @@ class WebInterface {
         <style>
           body { font-family: 'Segoe UI', Arial, sans-serif; background: #262729; color: #f2f2f2; padding:40px; }
           h2 { color: #b080fa; }
-          .section { background: #35363a; padding: 24px; border-radius: 12px; max-width: 600px; margin: auto; margin-bottom: 20px; }
+          .sections-grid {
+            column-count: 2;
+            column-gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto 20px;
+            orphans: 1;
+            widows: 1;
+          }
+          .section {
+            break-inside: avoid;
+            margin-bottom: 20px;
+            display: inline-block;
+            width: 100%;
+            box-sizing: border-box;
+            background: #35363a;
+            padding: 24px;
+            border-radius: 12px;
+          }
+
           .field { margin-bottom: 22px; }
           label { display: block; font-weight: bold; margin-bottom: 6px; }
           input[type="text"], input[type="number"], textarea {
@@ -316,6 +334,11 @@ class WebInterface {
           .custom-commands-section { margin-top: 15px; }
           .scheduled-messages-section { margin-top: 20px; }
           .save-section { text-align: center; margin-top: 24px; border-top: 1px solid #8070c7; padding-top: 16px; }
+          @media (max-width: 768px) {
+            .sections-grid {
+              column-count: 1;
+            }
+          }
         </style>
         <script>
           function toggleDiscordSettings() {
@@ -342,49 +365,51 @@ class WebInterface {
       <h2>Twitch AI Bot Settings</h2>
 
       <form method="POST" action="/">
-        <div class="section">
-          <h3 style="color: #b080fa; margin-top: 0;">General Settings</h3>
-          ${regularFields.map((k) => {
-            const label = FIELD_LABELS[k] || k;
-            const value = settings[k];
-            const field = this.renderInputField(k, value);
-            return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
-          }).join("")}
-        </div>
-
-        <div class="section">
-          <h3 style="color: #b080fa; margin-top: 0;">Custom Commands</h3>
-          ${this.renderCustomCommandsField('customCommands', settings.customCommands || [])}
-        </div>
-
-        <div class="section">
-          <h3 style="color: #b080fa; margin-top: 0;">Scheduled Messages</h3>
-          <div class="field">
-            <label for="enableScheduledMessages">${FIELD_LABELS.enableScheduledMessages || 'enableScheduledMessages'}</label>
-            ${this.renderInputField('enableScheduledMessages', settings.enableScheduledMessages)}
-          </div>
-          <div class="field">
-            <label for="scheduledMessageTimer">${FIELD_LABELS.scheduledMessageTimer || 'scheduledMessageTimer'}</label>
-            ${this.renderInputField('scheduledMessageTimer', settings.scheduledMessageTimer)}
-          </div>
-          ${this.renderScheduledMessagesField('scheduledMessages', settings.scheduledMessages || [])}
-        </div>
-
-        <div class="section">
-          <h3 style="color: #b080fa; margin-top: 0;">Discord Bot</h3>
-          <div class="field">
-            <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
-            ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
-          </div>
-
-          <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
-            <h4 style="color: #b080fa; margin-top: 20px;">Discord Bot Settings</h4>
-            ${discordFields.map((k) => {
+        <div class="sections-grid">
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">General Settings</h3>
+            ${regularFields.map((k) => {
               const label = FIELD_LABELS[k] || k;
               const value = settings[k];
               const field = this.renderInputField(k, value);
               return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
             }).join("")}
+          </div>
+
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Custom Commands</h3>
+            ${this.renderCustomCommandsField('customCommands', settings.customCommands || [])}
+          </div>
+
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Scheduled Messages</h3>
+            <div class="field">
+              <label for="enableScheduledMessages">${FIELD_LABELS.enableScheduledMessages || 'enableScheduledMessages'}</label>
+              ${this.renderInputField('enableScheduledMessages', settings.enableScheduledMessages)}
+            </div>
+            <div class="field">
+              <label for="scheduledMessageTimer">${FIELD_LABELS.scheduledMessageTimer || 'scheduledMessageTimer'}</label>
+              ${this.renderInputField('scheduledMessageTimer', settings.scheduledMessageTimer)}
+            </div>
+            ${this.renderScheduledMessagesField('scheduledMessages', settings.scheduledMessages || [])}
+          </div>
+
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Discord Bot</h3>
+            <div class="field">
+              <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
+              ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
+            </div>
+
+            <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
+              <h4 style="color: #b080fa; margin-top: 20px;">Discord Bot Settings</h4>
+              ${discordFields.map((k) => {
+                const label = FIELD_LABELS[k] || k;
+                const value = settings[k];
+                const field = this.renderInputField(k, value);
+                return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
+              }).join("")}
+            </div>
           </div>
         </div>
 
