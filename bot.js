@@ -9,7 +9,8 @@ const aiService = require('./services/aiService');
 const memoryService = require('./services/memoryService');
 const CommandHandler = require('./handlers/commandHandler');
 const EventHandler = require('./handlers/eventHandler');
-const AutoMessageHandler = require('./handlers/autoMessageHandler');
+
+const ScheduledMessageHandler = require('./handlers/scheduledMessageHandler');
 const WebInterface = require('./web/webInterface');
 const BotState = require('./models/botState');
 const discordBot = require('./discordbot.js');
@@ -55,7 +56,7 @@ async function initializeBot() {
     // Initialize handlers
     const commandHandler = new CommandHandler(twitchClient, botState);
     const eventHandler = new EventHandler(twitchClient, botState);
-    const autoMessageHandler = new AutoMessageHandler(twitchClient, botState);
+    const scheduledMessageHandler = new ScheduledMessageHandler(twitchClient, botState);
 
     // Initialize web interface
     const webInterface = new WebInterface(getSetting('webPort'));
@@ -210,7 +211,7 @@ process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
   await memoryService.stopMemoryServer();
   eventHandler.cleanup();
-  autoMessageHandler.cleanup();
+  scheduledMessageHandler.cleanup();
   process.exit(0);
 });
 

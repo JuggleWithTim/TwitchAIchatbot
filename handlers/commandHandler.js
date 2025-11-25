@@ -98,10 +98,7 @@ class CommandHandler {
       return await this.handleWaifuList(channel);
     }
 
-    // Auto-messages toggle
-    if (message.toLowerCase() === COMMANDS.AI_AUTO) {
-      return await this.handleAutoMessagesToggle(channel, tags);
-    }
+
 
     // Timer setting
     if (message.toLowerCase().startsWith(COMMANDS.AI_TIMER + ' ') || message.toLowerCase() === COMMANDS.AI_TIMER) {
@@ -257,19 +254,7 @@ class CommandHandler {
     return true;
   }
 
-  async handleAutoMessagesToggle(channel, tags) {
-    if (!hasElevatedPrivileges(tags)) return false;
 
-    const currentState = getSetting('enableAutoMessages', false);
-    const newState = !currentState;
-    setSetting('enableAutoMessages', newState ? 1 : 0);
-    await saveSettings();
-
-    const message = newState ? MESSAGES.AUTO_MESSAGES_ENABLED : MESSAGES.AUTO_MESSAGES_DISABLED;
-    this.twitchClient.say(channel, message);
-    this.botState.addMessage(`${getSetting('username')}: ${message}`);
-    return true;
-  }
 
   async handlePassiveLearningToggle(channel, tags) {
     if (!hasElevatedPrivileges(tags)) return false;
@@ -516,7 +501,6 @@ class CommandHandler {
     if (!hasElevatedPrivileges(tags)) return false;
 
     const helpMessage = `Available commands:
-      ${COMMANDS.AI_AUTO} - Toggle auto-messages on/off |
       ${COMMANDS.AI_MEMORY} - Toggle persistent memory on/off |
       ${COMMANDS.AI_PASSIVE_LEARNING} - Toggle passive learning on/off |
       ${COMMANDS.AI_TIMER} <minutes> - Set auto-message timer |

@@ -88,10 +88,41 @@ class WebInterface {
         return res.redirect('/');
       }
 
+      // Handle scheduled message actions
+      if (action === "addScheduledMessage") {
+        const newType = req.body.newScheduledType;
+        const newContent = req.body.newScheduledContent;
+
+        if (newType && newContent) {
+          const scheduledMessages = getSettings().scheduledMessages || [];
+          scheduledMessages.push({
+            type: newType,
+            content: newContent
+          });
+          setSetting('scheduledMessages', scheduledMessages);
+          await saveSettings();
+        }
+        return res.redirect('/');
+      }
+
+      // Check for delete scheduled message action by button name
+      if (req.body.deleteScheduledMessageIndex !== undefined) {
+        const deleteIndex = parseInt(req.body.deleteScheduledMessageIndex);
+        if (!isNaN(deleteIndex)) {
+          const scheduledMessages = getSettings().scheduledMessages || [];
+          if (deleteIndex >= 0 && deleteIndex < scheduledMessages.length) {
+            scheduledMessages.splice(deleteIndex, 1);
+            setSetting('scheduledMessages', scheduledMessages);
+            await saveSettings();
+          }
+        }
+        return res.redirect('/');
+      }
+
       // Update settings from form data
       for (const k of SETTINGS_EDITABLE_FIELDS) {
-        // Skip customCommands as it's handled separately by dedicated actions
-        if (k === 'customCommands') continue;
+        // Skip special fields that are handled separately
+        if (k === 'customCommands' || k === 'scheduledMessages') continue;
 
         let v;
         if (CHECKBOX_FIELDS.includes(k)) {
@@ -141,6 +172,9 @@ class WebInterface {
       let minutes = Math.max(1, Math.round(Number(value) / 60000));
       return `<input type="number" id="${key}" name="${key}" value="${minutes}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">minutes</span>`;
     }
+    if (key === "scheduledMessageTimer") {
+      return `<input type="number" id="${key}" name="${key}" value="${value || 10}" min="1" style="width:80px;" /> <span style="font-size:0.97em;color:#ccc;">minutes</span>`;
+    }
     if (key === "DEFAULT_ADDITIONAL_PROMPT") {
       return `<textarea id="${key}" name="${key}" rows="10" cols="60">${value}</textarea>`;
     }
@@ -157,6 +191,9 @@ class WebInterface {
     }
     if (key === "customCommands") {
       return this.renderCustomCommandsField(key, value || []);
+    }
+    if (key === "scheduledMessages") {
+      return this.renderScheduledMessagesField(key, value || []);
     }
     if (typeof value === "number") {
       return `<input type="number" id="${key}" name="${key}" value="${value}" />`;
@@ -209,14 +246,52 @@ class WebInterface {
   }
 
   /**
+   * Render scheduled messages management field
+   */
+  renderScheduledMessagesField(key, messages) {
+    let html = '<div class="scheduled-messages-section" style="border: 1px solid #8070c7; padding: 15px; border-radius: 5px; background: #202025;">';
+
+    // Add form to create new scheduled message
+    html += '<div style="margin-bottom: 20px; padding: 10px; background: #35363a; border-radius: 5px;">';
+    html += '<h4 style="color: #b080fa; margin-top: 0;">Add New Scheduled Message</h4>';
+    html += '<select name="newScheduledType" style="margin-right: 10px;"><option value="static">Static Message</option><option value="ai">AI Generated</option></select>';
+    html += '<textarea name="newScheduledContent" placeholder="Message content..." rows="3" style="width: 92%; margin-top: 5px;"></textarea>';
+    html += '<button type="submit" name="action" value="addScheduledMessage" style="margin-top: 8px; background: #4CAF50;">Add Message</button>';
+    html += '</div>';
+
+    // List existing messages
+    if (messages.length > 0) {
+      html += '<div class="existing-messages">';
+      html += '<h4 style="color: #b080fa;">Existing Scheduled Messages</h4>';
+
+      messages.forEach((msg, index) => {
+        html += `<div class="message-item" style="border: 1px solid #555; padding: 10px; margin-bottom: 10px; border-radius: 5px;">`;
+        html += `<strong>Message ${index + 1}</strong> (${msg.type})`;
+        html += `<p style="margin: 5px 0;">${msg.content}</p>`;
+        html += `<button type="submit" name="deleteScheduledMessageIndex" value="${index}" style="background: #e74c3c; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Delete</button>`;
+        html += `</div>`;
+      });
+
+      html += '</div>';
+    } else {
+      html += '<p>No scheduled messages defined yet.</p>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /**
    * Render the complete settings page
    */
   renderSettingsPage() {
     const settings = getSettings();
 
-    // Separate Discord fields from other fields
+    // Separate Discord, scheduled messages, and custom commands fields from other fields
     const discordFields = ['discordBotToken', 'discordChannels', 'discordSystemPrompt'];
-    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && k !== 'enableDiscordBot');
+    const scheduledFields = ['enableScheduledMessages', 'scheduledMessageTimer', 'scheduledMessages'];
+    const customCommandFields = ['customCommands'];
+    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && !customCommandFields.includes(k) && k !== 'enableDiscordBot');
 
     return `
     <!DOCTYPE html>
@@ -225,8 +300,29 @@ class WebInterface {
         <title>Twitch AI Bot Settings</title>
         <style>
           body { font-family: 'Segoe UI', Arial, sans-serif; background: #262729; color: #f2f2f2; padding:40px; }
-          h2 { color: #b080fa; }
-          form { background: #35363a; padding: 24px; border-radius: 12px; max-width: 600px; margin: auto;}
+          h2 {
+            color: #b080fa;
+            text-align: center;
+          }
+          .sections-grid {
+            column-count: 2;
+            column-gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto 20px;
+            orphans: 1;
+            widows: 1;
+          }
+          .section {
+            break-inside: avoid;
+            margin-bottom: 20px;
+            display: inline-block;
+            width: 100%;
+            box-sizing: border-box;
+            background: #35363a;
+            padding: 24px;
+            border-radius: 12px;
+          }
+
           .field { margin-bottom: 22px; }
           label { display: block; font-weight: bold; margin-bottom: 6px; }
           input[type="text"], input[type="number"], textarea {
@@ -239,6 +335,13 @@ class WebInterface {
           .discord-settings { margin-top: 15px; padding: 15px; background: #2a2b2e; border-radius: 5px; border: 1px solid #555; }
           .discord-settings.collapsed { display: none; }
           .custom-commands-section { margin-top: 15px; }
+          .scheduled-messages-section { margin-top: 20px; }
+          .save-section { text-align: center; margin-top: 24px; border-top: 1px solid #8070c7; padding-top: 16px; }
+          @media (max-width: 768px) {
+            .sections-grid {
+              column-count: 1;
+            }
+          }
         </style>
         <script>
           function toggleDiscordSettings() {
@@ -263,30 +366,57 @@ class WebInterface {
       </head>
       <body>
       <h2>Twitch AI Bot Settings</h2>
+
       <form method="POST" action="/">
-        ${regularFields.map((k) => {
-          const label = FIELD_LABELS[k] || k;
-          const value = settings[k];
-          const field = this.renderInputField(k, value);
-          return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
-        }).join("")}
+        <div class="sections-grid">
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">General Settings</h3>
+            ${regularFields.map((k) => {
+              const label = FIELD_LABELS[k] || k;
+              const value = settings[k];
+              const field = this.renderInputField(k, value);
+              return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
+            }).join("")}
+          </div>
 
-        <div class="field">
-          <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
-          ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Custom Commands</h3>
+            ${this.renderCustomCommandsField('customCommands', settings.customCommands || [])}
+          </div>
+
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Scheduled Messages</h3>
+            <div class="field">
+              <label for="enableScheduledMessages">${FIELD_LABELS.enableScheduledMessages || 'enableScheduledMessages'}</label>
+              ${this.renderInputField('enableScheduledMessages', settings.enableScheduledMessages)}
+            </div>
+            <div class="field">
+              <label for="scheduledMessageTimer">${FIELD_LABELS.scheduledMessageTimer || 'scheduledMessageTimer'}</label>
+              ${this.renderInputField('scheduledMessageTimer', settings.scheduledMessageTimer)}
+            </div>
+            ${this.renderScheduledMessagesField('scheduledMessages', settings.scheduledMessages || [])}
+          </div>
+
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Discord Bot</h3>
+            <div class="field">
+              <label for="enableDiscordBot">${FIELD_LABELS.enableDiscordBot || 'enableDiscordBot'}</label>
+              ${this.renderInputField('enableDiscordBot', settings.enableDiscordBot)}
+            </div>
+
+            <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
+              <h4 style="color: #b080fa; margin-top: 20px;">Discord Bot Settings</h4>
+              ${discordFields.map((k) => {
+                const label = FIELD_LABELS[k] || k;
+                const value = settings[k];
+                const field = this.renderInputField(k, value);
+                return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
+              }).join("")}
+            </div>
+          </div>
         </div>
 
-        <div id="discord-settings" class="discord-settings${settings.enableDiscordBot ? '' : ' collapsed'}">
-          <h3 style="color: #b080fa; margin-top: 0;">Discord Bot Settings</h3>
-          ${discordFields.map((k) => {
-            const label = FIELD_LABELS[k] || k;
-            const value = settings[k];
-            const field = this.renderInputField(k, value);
-            return `<div class="field"><label for="${k}">${label}</label>${field}</div>`;
-          }).join("")}
-        </div>
-
-        <div style="text-align: center; margin-top: 24px; border-top: 1px solid #8070c7; padding-top: 16px;">
+        <div class="save-section">
           <button type="submit" name="action" value="save" style="background: #4CAF50;">Save</button>
           <button type="submit" name="action" value="restart" style="background:#e74c3c;margin-left:16px;" onclick="return confirm('Are you sure you want to restart the bot?');">
             Restart Bot

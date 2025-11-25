@@ -14,7 +14,6 @@ const COMMANDS = {
   WAIFU: '!waifu',
   UNWAIFU: '!unwaifu',
   WAIFU_LIST: '!waifulist',
-  AI_AUTO: '!aiauto',
   AI_TIMER: '!aitimer',
   AI_SYS_PROMPT: '!aisysprompt',
   AI_RESET_PROMPT: '!airesetprompt',
@@ -35,7 +34,6 @@ const IMAGE_COMMAND_ALIASES = ['!imagine', '!create', '!image'];
 
 // === CHECK INTERVALS === //
 const CHECK_INTERVALS = {
-  AUTO_MESSAGE: 1200000, // 20 minutes
   SUBGIFT_PROCESS: 1000, // 1 second
   QUOTA_RESET: 24 * 60 * 60 * 1000, // 24 hours
   USER_RESPONSE_RESET: 5 * 60 * 1000 // 5 minutes
@@ -56,8 +54,6 @@ const SETTINGS_EDITABLE_FIELDS = [
   "password",
   "channel",
   "maxHistoryLength",
-  "inactivityThreshold",
-  "enableAutoMessages",
   "enableShoutoutCommand",
   "enableHugCommand",
   "enableWaifuCommand",
@@ -68,12 +64,15 @@ const SETTINGS_EDITABLE_FIELDS = [
   "enableRaidsAlerts",
   "enableMemory",
   "enablePassiveLearning",
+  "enableScheduledMessages",
+  "scheduledMessageTimer",
   "DEFAULT_ADDITIONAL_PROMPT",
   "enableDiscordBot",
   "discordBotToken",
   "discordChannels",
   "discordSystemPrompt",
-  "customCommands"
+  "customCommands",
+  "scheduledMessages"
 ];
 
 const FIELD_LABELS = {
@@ -82,7 +81,6 @@ const FIELD_LABELS = {
   channel: "Twitch channel",
   maxHistoryLength: "Context history length",
   inactivityThreshold: "Auto message timer",
-  enableAutoMessages: "Auto messages",
   enableShoutoutCommand: "Shoutout command",
   enableHugCommand: "Hug command",
   enableWaifuCommand: "Waifu commands",
@@ -93,16 +91,18 @@ const FIELD_LABELS = {
   enableRaidsAlerts: "Raids alerts",
   enableMemory: "Persistent memory",
   enablePassiveLearning: "Passive learning",
+  enableScheduledMessages: "Scheduled messages",
+  scheduledMessageTimer: "Scheduled message timer",
   DEFAULT_ADDITIONAL_PROMPT: "System prompt",
   enableDiscordBot: "Enable Discord Bot",
   discordBotToken: "Discord Bot Token",
   discordChannels: "Discord Channel IDs or Names (comma separated)",
   discordSystemPrompt: "Discord Bot System Prompt",
-  customCommands: "Custom Commands"
+  customCommands: "Custom Commands",
+  scheduledMessages: "Scheduled Messages"
 };
 
 const CHECKBOX_FIELDS = [
-  "enableAutoMessages",
   "enableShoutoutCommand",
   "enableHugCommand",
   "enableWaifuCommand",
@@ -113,6 +113,7 @@ const CHECKBOX_FIELDS = [
   "enableRaidsAlerts",
   "enableMemory",
   "enablePassiveLearning",
+  "enableScheduledMessages",
   "enableDiscordBot"
 ];
 
@@ -126,8 +127,6 @@ const MESSAGES = {
   WAIFU_NOT_LISTED: (username) => `@${username}, you're not on the waifu list!`,
   WAIFU_LIST_EMPTY: "Nobody is on the waifu list yet! 💔",
   WAIFU_LIST: (list) => "My waifus: " + list.map(u => '@' + u).join(', ') + " 💖",
-  AUTO_MESSAGES_ENABLED: 'Auto-messages are now enabled. 🟢',
-  AUTO_MESSAGES_DISABLED: 'Auto-messages are now disabled. 🔴',
   TIMER_SET: (minutes) => `Auto message timer set to ${minutes} minutes. ⏲️`,
   INVALID_MINUTES: 'Please provide a valid number of minutes (e.g., !aitimer 30). ❌',
   PROMPT_UPDATED: 'System prompt updated successfully! ✅',
@@ -150,7 +149,6 @@ const MESSAGES = {
   USER_NOT_FOUND: (username) => `Couldn't find a user called "${username}". 👻`,
   SHOUTOUT_ERROR: (username) => `Couldn't shoutout "${username}" (maybe invalid name or rate-limited).`,
   INVALID_SO_USAGE: "Usage: !so <username>",
-  RECENT_MESSAGE_BY_BOT: 'Most recent message was sent by the bot. Skipping auto-message.',
   RESTARTING: '<html><body style="background:#262729;color:white"><h2>Restarting now...</h2></body></html>',
   CONNECTED: 'Bot connected to Twitch chat!',
   CONNECTION_FAILED: 'Failed to connect to Twitch chat:',
