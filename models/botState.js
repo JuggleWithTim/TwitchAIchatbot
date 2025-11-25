@@ -148,30 +148,7 @@ class BotState {
     this.lastBotMentionTime = getTimestamp();
   }
 
-  /**
-   * Check if bot should send auto-message
-   * @returns {boolean} - True if should send auto-message
-   */
-  shouldSendAutoMessage() {
-    if (this.botPaused) return false;
-    if (!getSetting('enableAutoMessages', false)) return false;
 
-    const threshold = getSetting('inactivityThreshold', 1200000);
-    if (!hasTimeElapsed(this.lastBotMentionTime, threshold)) return false;
-
-    // Check if last message was from bot
-    if (this.messageHistory.length > 0) {
-      const lastMessage = this.messageHistory[this.messageHistory.length - 1];
-      const botUsername = getSetting('username', 'bot').toLowerCase();
-      if (lastMessage.toLowerCase().startsWith(`${botUsername}:`)) {
-        console.log(MESSAGES.RECENT_MESSAGE_BY_BOT);
-        this.updateLastMentionTime();
-        return false;
-      }
-    }
-
-    return true;
-  }
 
   /**
    * Pause the bot

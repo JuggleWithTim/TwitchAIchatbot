@@ -69,7 +69,7 @@ class ScheduledMessageHandler {
       const botUsername = getSetting('username').toLowerCase();
       if (mostRecentMessage && mostRecentMessage.toLowerCase().startsWith(`${botUsername}:`)) {
         // Skip sending this message and advance to the next one
-        console.log('Last message sent by the bot, skipping scheduled message.');
+        console.log('Most recent message sent by the bot, skipping scheduled message.');
         this.advanceToNextMessage();
         return;
       }
