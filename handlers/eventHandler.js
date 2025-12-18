@@ -154,6 +154,13 @@ class EventHandler {
       return;
     }
 
+    // Skip individual acknowledgments for community mystery gifts
+    // These are already handled by the submysterygift event
+    if (userstate && userstate['msg-param-community-gift-id']) {
+      console.log(`Part of community mystery gift - skipping individual acknowledgment.`);
+      return;
+    }
+
     this.subgiftBuffer.push({ channel, username, streakMonths, recipient, methods, userstate });
   }
 

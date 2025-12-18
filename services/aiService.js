@@ -454,7 +454,8 @@ Follow these steps for each interaction:
           prompt: cleanPrompt,
           n: 1,
           size: getSetting('imageSize', '1024x1024'),
-          quality: getSetting('imageQuality', 'medium')
+          quality: getSetting('imageQuality', 'medium'),
+          moderation: getSetting('imageModeration', 'low')
         });
 
         return {
@@ -468,7 +469,8 @@ Follow these steps for each interaction:
           prompt: cleanPrompt,
           n: 1,
           size: getSetting('imageSize', '1024x1024'),
-          quality: getSetting('imageQuality', 'medium')
+          quality: getSetting('imageQuality', 'medium'),
+          moderation: getSetting('imageModeration', 'low')
         });
 
         return {
