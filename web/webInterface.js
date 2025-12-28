@@ -119,6 +119,33 @@ class WebInterface {
         return res.redirect('/');
       }
 
+      // Handle quote actions
+      if (action === "addQuote") {
+        const newQuote = req.body.newQuote;
+
+        if (newQuote && newQuote.trim()) {
+          const quotes = getSettings().quotes || [];
+          quotes.push(newQuote.trim());
+          setSetting('quotes', quotes);
+          await saveSettings();
+        }
+        return res.redirect('/');
+      }
+
+      // Check for delete quote action by button name
+      if (req.body.deleteQuoteIndex !== undefined) {
+        const deleteIndex = parseInt(req.body.deleteQuoteIndex);
+        if (!isNaN(deleteIndex)) {
+          const quotes = getSettings().quotes || [];
+          if (deleteIndex >= 0 && deleteIndex < quotes.length) {
+            quotes.splice(deleteIndex, 1);
+            setSetting('quotes', quotes);
+            await saveSettings();
+          }
+        }
+        return res.redirect('/');
+      }
+
       // Update settings from form data
       for (const k of SETTINGS_EDITABLE_FIELDS) {
         // Skip special fields that are handled separately
@@ -194,6 +221,9 @@ class WebInterface {
     }
     if (key === "scheduledMessages") {
       return this.renderScheduledMessagesField(key, value || []);
+    }
+    if (key === "quotes") {
+      return this.renderQuotesField(key, value || []);
     }
     if (typeof value === "number") {
       return `<input type="number" id="${key}" name="${key}" value="${value}" />`;
@@ -282,16 +312,51 @@ class WebInterface {
   }
 
   /**
+   * Render quotes management field
+   */
+  renderQuotesField(key, quotes) {
+    let html = '<div class="quotes-section" style="border: 1px solid #8070c7; padding: 15px; border-radius: 5px; background: #202025;">';
+
+    // Add form to create new quote
+    html += '<div style="margin-bottom: 20px; padding: 10px; background: #35363a; border-radius: 5px;">';
+    html += '<h4 style="color: #b080fa; margin-top: 0;">Add New Quote</h4>';
+    html += '<textarea name="newQuote" placeholder="Enter quote text..." rows="3" style="width: 92%; margin-top: 5px;"></textarea>';
+    html += '<button type="submit" name="action" value="addQuote" style="margin-top: 8px; background: #4CAF50;">Add Quote</button>';
+    html += '</div>';
+
+    // List existing quotes
+    if (quotes.length > 0) {
+      html += '<div class="existing-quotes">';
+      html += '<h4 style="color: #b080fa;">Existing Quotes</h4>';
+
+      quotes.forEach((quote, index) => {
+        html += `<div class="quote-item" style="border: 1px solid #555; padding: 10px; margin-bottom: 10px; border-radius: 5px;">`;
+        html += `<p style="margin: 5px 0; font-style: italic;">${quote}</p>`;
+        html += `<button type="submit" name="deleteQuoteIndex" value="${index}" style="background: #e74c3c; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Delete</button>`;
+        html += `</div>`;
+      });
+
+      html += '</div>';
+    } else {
+      html += '<p>No quotes added yet.</p>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /**
    * Render the complete settings page
    */
   renderSettingsPage() {
     const settings = getSettings();
 
-    // Separate Discord, scheduled messages, and custom commands fields from other fields
+    // Separate Discord, scheduled messages, custom commands, and quotes fields from other fields
     const discordFields = ['discordBotToken', 'discordChannels', 'discordSystemPrompt'];
     const scheduledFields = ['enableScheduledMessages', 'scheduledMessageTimer', 'scheduledMessages'];
     const customCommandFields = ['customCommands'];
-    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && !customCommandFields.includes(k) && k !== 'enableDiscordBot');
+    const quotesFields = ['quotes'];
+    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && !customCommandFields.includes(k) && !quotesFields.includes(k) && k !== 'enableDiscordBot');
 
     return `
     <!DOCTYPE html>
@@ -395,6 +460,11 @@ class WebInterface {
               ${this.renderInputField('scheduledMessageTimer', settings.scheduledMessageTimer)}
             </div>
             ${this.renderScheduledMessagesField('scheduledMessages', settings.scheduledMessages || [])}
+          </div>
+
+          <div class="section">
+            <h3 style="color: #b080fa; margin-top: 0;">Quotes</h3>
+            ${this.renderQuotesField('quotes', settings.quotes || [])}
           </div>
 
           <div class="section">

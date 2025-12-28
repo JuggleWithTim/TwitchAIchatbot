@@ -26,7 +26,9 @@ const COMMANDS = {
   AI_RESET_QUOTA: '!airesetquota',
   AI_PASSIVE_LEARNING: '!aipassive',
   AI_MEMORY: '!aimemory',
-  AI_HELP: '!aihelp'
+  AI_HELP: '!aihelp',
+  QUOTE: '!quote',
+  ADD_QUOTE: '!addquote'
 };
 
 // === IMAGE GENERATION ALIASES === //
@@ -72,7 +74,8 @@ const SETTINGS_EDITABLE_FIELDS = [
   "discordChannels",
   "discordSystemPrompt",
   "customCommands",
-  "scheduledMessages"
+  "scheduledMessages",
+  "quotes"
 ];
 
 const FIELD_LABELS = {
@@ -99,7 +102,8 @@ const FIELD_LABELS = {
   discordChannels: "Discord Channel IDs or Names (comma separated)",
   discordSystemPrompt: "Discord Bot System Prompt",
   customCommands: "Custom Commands",
-  scheduledMessages: "Scheduled Messages"
+  scheduledMessages: "Scheduled Messages",
+  quotes: "Quotes"
 };
 
 const CHECKBOX_FIELDS = [
@@ -155,7 +159,11 @@ const MESSAGES = {
   DISCORD_DISABLED: 'Discord bot is disabled or token missing in settings.',
   WEB_UI_STARTED: (port) => `Settings web UI running at http://localhost:${port}`,
   AUTH_REQUIRED: 'Authentication required.',
-  INVALID_INPUT: 'Invalid input'
+  INVALID_INPUT: 'Invalid input',
+  QUOTE_ADDED: 'Quote added successfully! 💬',
+  QUOTE_NO_QUOTES: 'No quotes available yet! 📝',
+  QUOTE_INVALID_USAGE: 'Usage: !addquote <quote text>',
+  QUOTE: (quote) => `${quote} 💬`
 };
 
 module.exports = {

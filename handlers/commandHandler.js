@@ -154,6 +154,14 @@ class CommandHandler {
       return await this.handleHelpCommand(channel, tags);
     }
 
+    // Quote commands
+    if (message.toLowerCase() === COMMANDS.QUOTE) {
+      return await this.handleQuoteCommand(channel);
+    }
+    if (message.toLowerCase().startsWith(COMMANDS.ADD_QUOTE + ' ')) {
+      return await this.handleAddQuoteCommand(channel, tags, message);
+    }
+
     return false; // Command not handled
   }
 
@@ -514,6 +522,41 @@ class CommandHandler {
 
     this.twitchClient.say(channel, helpMessage);
     this.botState.addMessage(`${getSetting('username')}: ${helpMessage}`);
+    return true;
+  }
+
+  async handleQuoteCommand(channel) {
+    const quotes = getSettings().quotes || [];
+    if (quotes.length === 0) {
+      this.twitchClient.say(channel, MESSAGES.QUOTE_NO_QUOTES);
+      this.botState.addMessage(`${getSetting('username')}: ${MESSAGES.QUOTE_NO_QUOTES}`);
+      return true;
+    }
+
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+    const response = MESSAGES.QUOTE(randomQuote);
+    this.twitchClient.say(channel, response);
+    this.botState.addMessage(`${getSetting('username')}: ${response}`);
+    return true;
+  }
+
+  async handleAddQuoteCommand(channel, tags, message) {
+    if (!hasElevatedPrivileges(tags)) return false;
+
+    const quoteText = message.slice(COMMANDS.ADD_QUOTE.length + 1).trim();
+    if (!quoteText) {
+      this.twitchClient.say(channel, MESSAGES.QUOTE_INVALID_USAGE);
+      this.botState.addMessage(`${getSetting('username')}: ${MESSAGES.QUOTE_INVALID_USAGE}`);
+      return true;
+    }
+
+    const quotes = getSettings().quotes || [];
+    quotes.push(quoteText);
+    setSetting('quotes', quotes);
+    await saveSettings();
+
+    this.twitchClient.say(channel, MESSAGES.QUOTE_ADDED);
+    this.botState.addMessage(`${getSetting('username')}: ${MESSAGES.QUOTE_ADDED}`);
     return true;
   }
 }
