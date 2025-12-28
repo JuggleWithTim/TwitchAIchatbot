@@ -356,7 +356,7 @@ class WebInterface {
     const scheduledFields = ['enableScheduledMessages', 'scheduledMessageTimer', 'scheduledMessages'];
     const customCommandFields = ['customCommands'];
     const quotesFields = ['quotes'];
-    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && !customCommandFields.includes(k) && !quotesFields.includes(k) && k !== 'enableDiscordBot');
+    const regularFields = SETTINGS_EDITABLE_FIELDS.filter(k => !discordFields.includes(k) && !scheduledFields.includes(k) && !customCommandFields.includes(k) && !quotesFields.includes(k) && k !== 'enableDiscordBot' && k !== 'enableQuoteCommand');
 
     return `
     <!DOCTYPE html>
@@ -464,6 +464,10 @@ class WebInterface {
 
           <div class="section">
             <h3 style="color: #b080fa; margin-top: 0;">Quotes</h3>
+            <div class="field">
+              <label for="enableQuoteCommand">${FIELD_LABELS.enableQuoteCommand || 'enableQuoteCommand'}</label>
+              ${this.renderInputField('enableQuoteCommand', settings.enableQuoteCommand)}
+            </div>
             ${this.renderQuotesField('quotes', settings.quotes || [])}
           </div>
 

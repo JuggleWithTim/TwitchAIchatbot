@@ -526,6 +526,8 @@ class CommandHandler {
   }
 
   async handleQuoteCommand(channel) {
+    if (!getSetting('enableQuoteCommand', false)) return false;
+
     const quotes = getSettings().quotes || [];
     if (quotes.length === 0) {
       this.twitchClient.say(channel, MESSAGES.QUOTE_NO_QUOTES);
@@ -541,6 +543,7 @@ class CommandHandler {
   }
 
   async handleAddQuoteCommand(channel, tags, message) {
+    if (!getSetting('enableQuoteCommand', false)) return false;
     if (!hasElevatedPrivileges(tags)) return false;
 
     const quoteText = message.slice(COMMANDS.ADD_QUOTE.length + 1).trim();
