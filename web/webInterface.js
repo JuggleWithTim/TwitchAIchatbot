@@ -149,7 +149,7 @@ class WebInterface {
       // Update settings from form data
       for (const k of SETTINGS_EDITABLE_FIELDS) {
         // Skip special fields that are handled separately
-        if (k === 'customCommands' || k === 'scheduledMessages') continue;
+        if (k === 'customCommands' || k === 'scheduledMessages' || k === 'quotes') continue;
 
         let v;
         if (CHECKBOX_FIELDS.includes(k)) {
