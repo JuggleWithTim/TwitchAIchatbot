@@ -27,7 +27,7 @@ If you don't want to bother setting this up yourself and want it always availabl
 
 ## Installation
 ### 1. Prerequisites
-* [Node.js](https://nodejs.org/) (version 16 or higher) installed.
+* [Node.js](https://nodejs.org/) (version 22 or higher) installed.
 * An [Ollama](https://ollama.com/) instance running locally. (Not needed if using OpenAI's API)
 * A Twitch account for the bot and an [OAuth](https://twitchtokengenerator.com/) token.
 
@@ -37,7 +37,7 @@ If you don't want to bother setting this up yourself and want it always availabl
 ### 3. Install Dependencies
 * Open the command prompt and navigate to the folder containing bot.js
 `cd /path/to/TwitchAIchatbot`
-* Install required npm packages with `npm install tmi.js axios openai fs path`
+* Install required npm packages with `npm install @tmi.js/chat axios openai fs path`
 * Make sure Ollama has the model you want to use installed. Run `ollama run llama3.2` in the command prompt to install the default model.
 
 ### 4. Configure the Bot

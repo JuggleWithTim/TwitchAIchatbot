@@ -1,5 +1,5 @@
 // Import required libraries
-const tmi = require('tmi.js');
+const tmi = require('@tmi.js/chat');
 const { OpenAI } = require('openai');
 
 // Import our modules
@@ -36,11 +36,7 @@ async function initializeBot() {
 
     // Initialize Twitch client
     const twitchClient = new tmi.Client({
-      options: { debug: true },
-      identity: {
-        username: getSetting('username'),
-        password: getSetting('password'),
-      },
+      token: getSetting('password'),
       channels: [getSetting('channel')],
     });
 
@@ -62,9 +58,21 @@ async function initializeBot() {
     const webInterface = new WebInterface(getSetting('webPort'));
 
 // Event listener for Twitch chat messages
-twitchClient.on('message', async (channel, tags, message, self) => {
+twitchClient.on('message', async (event) => {
+  const channel = event.channel?.login || getSetting('channel');
+  const message = event.message?.text || '';
+  const user = event.user || {};
+  const tags = {
+    username: user.login,
+    'display-name': user.display,
+    badges: user.badges,
+    isBroadcaster: user.isBroadcaster,
+    isMod: user.isMod,
+    isLeadMod: user.isLeadMod
+  };
+
   // Ignore messages from the bot itself
-  if (self) return;
+  if ((user.login || '').toLowerCase() === (getSetting('username') || '').toLowerCase()) return;
 
   // Test commands for Twitch events
   /*switch (message.toLowerCase()) {
@@ -108,8 +116,16 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   // Handle normal messages (bot mentions)
   if (botState.isPaused()) return;
 
-  const botUsername = twitchClient.getUsername().toLowerCase();
+  const botUsername = (getSetting('username') || '').toLowerCase();
   const isBotMention = message.toLowerCase().includes(botUsername);
+
+  // Handle cheer events (represented on message events in @tmi.js/chat)
+  if (event.cheer && event.cheer.bits) {
+    await eventHandler.handleCheer(channel, {
+      username: user.login,
+      bits: event.cheer.bits
+    }, message);
+  }
 
   // Passive learning: Extract memory from messages that won't trigger bot responses
   if (getSetting('enableMemory') == 1 && getSetting('enablePassiveLearning') == 1 && !isBotMention) {
@@ -165,43 +181,84 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
 });
 
-// Twitch event listeners
-twitchClient.on('subscription', (channel, username, method, message, userstate) => {
-  eventHandler.handleSubscription(channel, username, method, message, userstate);
+// Twitch subscription events
+twitchClient.on('sub', (event) => {
+  const channel = event.channel?.login || getSetting('channel');
+  const username = event.user?.login;
+
+  if (!username) return;
+
+  if (event.type === 'sub') {
+    eventHandler.handleSubscription(
+      channel,
+      username,
+      { plan: event.plan?.plan },
+      '',
+      {
+        'msg-param-cumulative-months': 1,
+        'msg-param-sub-plan': event.plan?.plan
+      }
+    );
+  } else if (event.type === 'resub') {
+    eventHandler.handleResubscription(
+      channel,
+      username,
+      event.cumulativeMonths,
+      event.message?.text || '',
+      {
+        'msg-param-cumulative-months': event.cumulativeMonths,
+        'msg-param-sub-plan': event.plan?.plan
+      },
+      { plan: event.plan?.plan }
+    );
+  } else if (event.type === 'subMysteryGift') {
+    eventHandler.handleSubMysteryGift(
+      channel,
+      username,
+      event.mystery?.count || 0,
+      { plan: event.plan?.plan },
+      {}
+    );
+  } else if (event.type === 'subGift') {
+    eventHandler.handleSubgift(
+      channel,
+      username,
+      0,
+      event.recipient?.login,
+      {
+        plan: event.plan?.plan,
+        wasAnonymous: event.user?.isAnon === true
+      },
+      {
+        'msg-param-gift-months': event.gift?.months,
+        'msg-param-community-gift-id': event.mystery?.id
+      }
+    );
+  } else if (event.type === 'primePaidUpgrade') {
+    eventHandler.handlePrimeUpgrade(
+      channel,
+      username,
+      { plan: event.plan?.plan || 'Prime' },
+      {}
+    );
+  }
 });
 
-twitchClient.on('resub', (channel, username, months, message, userstate, methods) => {
-  eventHandler.handleResubscription(channel, username, months, message, userstate, methods);
-});
-
-twitchClient.on('submysterygift', (channel, username, numbOfSubs, methods, userstate) => {
-  eventHandler.handleSubMysteryGift(channel, username, numbOfSubs, methods, userstate);
-});
-
-twitchClient.on('subgift', (channel, username, streakMonths, recipient, methods, userstate) => {
-  eventHandler.handleSubgift(channel, username, streakMonths, recipient, methods, userstate);
-});
-
-twitchClient.on('primepaidupgrade', (channel, username, methods, userstate) => {
-  eventHandler.handlePrimeUpgrade(channel, username, methods, userstate);
-});
-
-twitchClient.on('cheer', (channel, userstate, message) => {
-  eventHandler.handleCheer(channel, userstate, message);
-});
-
-twitchClient.on('raided', (channel, username, viewers) => {
-  eventHandler.handleRaid(channel, username, viewers);
+twitchClient.on('raid', (event) => {
+  const channel = event.channel?.login || getSetting('channel');
+  eventHandler.handleRaid(channel, event.user?.login, event.viewers);
 });
 
 // Connect to Twitch chat
-twitchClient.connect()
-  .then(() => {
-    console.log(MESSAGES.CONNECTED);
-  })
-  .catch((err) => {
-    console.error(MESSAGES.CONNECTION_FAILED, err);
-  });
+twitchClient.on('connect', () => {
+  console.log(MESSAGES.CONNECTED);
+});
+
+twitchClient.on('error', (err) => {
+  console.error(MESSAGES.CONNECTION_FAILED, err);
+});
+
+twitchClient.connect();
 
 // Start web interface
 webInterface.start();

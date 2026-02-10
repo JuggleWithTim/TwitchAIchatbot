@@ -7,11 +7,11 @@
     "start": "node bot.js"
   },
   "dependencies": {
+    "@tmi.js/chat": "^0.7.4",
     "axios": "^1.6.2",
     "discord.js": "^14.14.1",
     "express": "^4.18.2",
-    "openai": "^4.28.0",
-    "tmi.js": "^1.8.5"
+    "openai": "^4.28.0"
   },
   "keywords": [
     "twitch",

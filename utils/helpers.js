@@ -25,9 +25,10 @@ function formatMention(username) {
  * @returns {boolean} - Whether the user has elevated privileges
  */
 function hasElevatedPrivileges(tags, juggleWithTimUsername = 'jugglewithtim') {
-  const isBroadcaster = tags.badges?.broadcaster === '1';
-  const isModerator = tags.badges?.moderator === '1';
-  const isJuggleWithTim = tags.username.toLowerCase() === juggleWithTimUsername.toLowerCase();
+  const isBroadcaster = tags?.isBroadcaster === true || tags?.badges?.broadcaster === '1';
+  const isModerator = tags?.isLeadMod === true || tags?.isMod === true || tags?.badges?.moderator === '1';
+  const username = tags?.username || tags?.user?.login || '';
+  const isJuggleWithTim = username.toLowerCase() === juggleWithTimUsername.toLowerCase();
   return isBroadcaster || isModerator || isJuggleWithTim;
 }
 
