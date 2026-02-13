@@ -27,6 +27,43 @@ class AIService {
   }
 
   /**
+   * Check whether a model should use the Responses API path
+   * @param {string} model - OpenAI model name
+   * @returns {boolean}
+   */
+  isGPT5Model(model) {
+    return typeof model === 'string' && model.toLowerCase().startsWith('gpt-5');
+  }
+
+  /**
+   * Safely extract text from a Responses API payload
+   * @param {Object} response - OpenAI response payload
+   * @returns {string}
+   */
+  extractResponseText(response) {
+    if (!response) return '';
+
+    if (typeof response.output_text === 'string' && response.output_text.trim()) {
+      return response.output_text;
+    }
+
+    if (Array.isArray(response.output)) {
+      const textParts = [];
+      for (const item of response.output) {
+        if (!Array.isArray(item.content)) continue;
+        for (const contentItem of item.content) {
+          if (contentItem.type === 'output_text' && typeof contentItem.text === 'string') {
+            textParts.push(contentItem.text);
+          }
+        }
+      }
+      return textParts.join('\n').trim();
+    }
+
+    return '';
+  }
+
+  /**
    * Validate if a URL is safe for image downloading
    * @param {string} url - URL to validate
    * @returns {boolean} - True if URL is safe
@@ -125,31 +162,73 @@ class AIService {
   }
 
   /**
+   * Unified text generation for OpenAI models.
+   * Uses Responses API for GPT-5 models and Chat Completions for legacy models.
+   */
+  async generateOpenAIText({
+    model,
+    systemPrompt,
+    userPrompt,
+    maxOutputTokens = 150,
+    reasoningEffort = 'minimal',
+    verbosity = 'low',
+    temperature
+  }) {
+    this.ensureOpenAIInitialized();
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized - no API key provided');
+    }
+
+    if (this.isGPT5Model(model)) {
+      const response = await this.openai.responses.create({
+        model,
+        instructions: systemPrompt,
+        input: userPrompt,
+        reasoning: { effort: reasoningEffort },
+        text: { verbosity },
+        max_output_tokens: maxOutputTokens
+      });
+      return this.extractResponseText(response);
+    }
+
+    const response = await this.openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: maxOutputTokens,
+      ...(typeof temperature === 'number' ? { temperature } : {}),
+    });
+    return response.choices?.[0]?.message?.content || '';
+  }
+
+  /**
    * Create a GPT-5 response using the Responses API
    * @param {string} input - Input text
    * @param {string} reasoningEffort - Reasoning effort level
    * @param {string} verbosity - Output verbosity level
    * @returns {Promise<Object>} - GPT-5 response
    */
-  async createGPT5Response(input, reasoningEffort = 'minimal', verbosity = 'low') {
+  async createGPT5Response(input, reasoningEffort = 'minimal', verbosity = 'low', systemPrompt = 'You are a precise assistant. Return only the requested output.') {
     this.ensureOpenAIInitialized();
     if (!this.openai) {
       throw new Error('OpenAI client not initialized - no API key provided');
     }
 
     try {
-      const response = await this.openai.responses.create({
+      const output = await this.generateOpenAIText({
         model: 'gpt-5-nano',
-        input: input,
-        reasoning: { effort: reasoningEffort },
-        text: { verbosity: verbosity },
-        max_output_tokens: 500
+        systemPrompt,
+        userPrompt: input,
+        maxOutputTokens: 500,
+        reasoningEffort,
+        verbosity
       });
 
       return {
         success: true,
-        output: response.output_text,
-        reasoning: response.reasoning_items
+        output
       };
     } catch (error) {
       console.error('GPT-5 API error:', error);
@@ -175,28 +254,28 @@ class AIService {
     // Always try GPT-5-nano first for cost optimization, fallback to settings model
     let extractedText;
 
-    const gpt5Response = await this.createGPT5Response(extractionPrompt, 'minimal', 'low');
+    const gpt5Response = await this.createGPT5Response(
+      extractionPrompt,
+      'minimal',
+      'low',
+      'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
+    );
     if (gpt5Response.success) {
       extractedText = cleanResponse(gpt5Response.output);
     } else {
       // Fallback to settings model if GPT-5 fails
       console.log('Memory extraction: GPT-5-nano failed, falling back to settings model');
-      const extractionResponse = await this.openai.chat.completions.create({
-        model: getSetting('openaiModelName', 'gpt-4o-mini'),
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: extractionPrompt
-          }
-        ],
-        max_tokens: 500,
+      const fallbackModel = getSetting('openaiModelName', 'gpt-5-nano');
+      const extractionText = await this.generateOpenAIText({
+        model: fallbackModel,
+        systemPrompt: 'You are a memory extraction assistant. Analyze conversations and extract structured information for long-term storage. Only extract genuinely new information that would be valuable to remember. Respond with valid JSON only.',
+        userPrompt: extractionPrompt,
+        maxOutputTokens: 500,
+        reasoningEffort: 'minimal',
+        verbosity: 'low',
         temperature: 0.3
       });
-      extractedText = cleanResponse(extractionResponse.choices[0].message.content);
+      extractedText = cleanResponse(extractionText);
     }
 
     // Parse the JSON response
@@ -312,15 +391,16 @@ Follow these steps for each interaction:
 
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: getSetting('openaiModelName', 'gpt-4o-mini'),
-        messages: [
-          { role: 'system', content: prompt },
-          { role: 'user', content: `Context:\n${context}\n\nUser: ${userMessage}\nBot:` },
-        ],
-        max_tokens: 150,
+      const responseText = await this.generateOpenAIText({
+        model: getSetting('openaiModelName', 'gpt-5-nano'),
+        systemPrompt: prompt,
+        userPrompt: `Context:\n${context}\n\nUser: ${userMessage}\nBot:`,
+        maxOutputTokens: 150,
+        reasoningEffort: 'minimal',
+        verbosity: 'low',
+        temperature: getSetting('temperature')
       });
-      return cleanResponse(response.choices[0].message.content);
+      return cleanResponse(responseText);
     } catch (error) {
       console.error('Error calling OpenAI API:', error);
       throw new Error('Sorry, I encountered an error while generating a response.');
@@ -637,23 +717,17 @@ User's message: ${userMessage}`;
     const context = messageHistory.slice(-15).join('\n');
 
     try {
-      const promptResponse = await this.openai.chat.completions.create({
-        model: getSetting('openaiModelName', 'gpt-4o-mini'),
-        messages: [
-          {
-            role: 'system',
-            content: `Generate a concise image generation prompt based on recent chat context. Focus on visual elements and key themes. Respond ONLY with the prompt. Format: "Vibrant [style] of [subject], [details], [medium/art style]"`
-          },
-          {
-            role: 'user',
-            content: `Recent chat (latest first):\n${context}\n\nVisual concept:`
-          }
-        ],
-        max_tokens: 300,
+      const promptText = await this.generateOpenAIText({
+        model: getSetting('openaiModelName', 'gpt-5-nano'),
+        systemPrompt: 'Generate a concise image generation prompt based on recent chat context. Focus on visual elements and key themes. Respond ONLY with the prompt. Format: "Vibrant [style] of [subject], [details], [medium/art style]"',
+        userPrompt: `Recent chat (latest first):\n${context}\n\nVisual concept:`,
+        maxOutputTokens: 300,
+        reasoningEffort: 'minimal',
+        verbosity: 'low',
         temperature: 0.7
       });
 
-      return cleanResponse(promptResponse.choices[0].message.content);
+      return cleanResponse(promptText);
     } catch (error) {
       console.error('Error generating prompt from context:', error);
       throw error;

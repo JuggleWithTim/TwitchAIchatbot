@@ -12,6 +12,33 @@ const DISCORD_CORE_PROMPT = `You are a Discord chatbot. Try to keep messages sho
 // Timeout for context memory (we could clear periodically or on max message length too)
 const MAX_HISTORY = 15;
 
+function isGPT5Model(model) {
+  return typeof model === 'string' && model.toLowerCase().startsWith('gpt-5');
+}
+
+function extractResponseText(response) {
+  if (!response) return '';
+
+  if (typeof response.output_text === 'string' && response.output_text.trim()) {
+    return response.output_text;
+  }
+
+  if (Array.isArray(response.output)) {
+    const textParts = [];
+    for (const item of response.output) {
+      if (!Array.isArray(item.content)) continue;
+      for (const contentItem of item.content) {
+        if (contentItem.type === 'output_text' && typeof contentItem.text === 'string') {
+          textParts.push(contentItem.text);
+        }
+      }
+    }
+    return textParts.join('\n').trim();
+  }
+
+  return '';
+}
+
 function initializeDiscord(settings, openaiInstance) {
   discordSettings = settings;
 
@@ -45,10 +72,23 @@ function initializeDiscord(settings, openaiInstance) {
 
     const prompt = discordSystemPrompt;
     const context = discordMessageHistory.join('\n');
+    const model = discordSettings.openaiModelName || 'gpt-5-nano';
 
     try {
+      if (isGPT5Model(model)) {
+        const response = await openaiInstance.responses.create({
+          model,
+          instructions: prompt,
+          input: `Context:\n${context}\n\nUser: ${userMessage}\nBot:`,
+          reasoning: { effort: 'minimal' },
+          text: { verbosity: 'low' },
+          max_output_tokens: 300,
+        });
+        return extractResponseText(response);
+      }
+
       const response = await openaiInstance.chat.completions.create({
-        model: discordSettings.openaiModelName || 'gpt-4o-mini',
+        model,
         messages: [
           { role: 'system', content: prompt },
           { role: 'user', content: `Context:\n${context}\n\nUser: ${userMessage}\nBot:` }
